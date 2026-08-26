@@ -13,8 +13,8 @@
     "prisma:studio": "prisma studio --schema=src/database/prisma/schema.prisma",
     "prisma:push": "prisma db push --schema=src/database/prisma/schema.prisma",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write src",
-    },
+    "format": "prettier --write src"
+  },
   "keywords": [
     "discord",
     "bot",
