@@ -5,8 +5,8 @@ export class AccountService {
   private redditAccountRepo = new RedditAccountRepository();
   private configRepo = new BotConfigRepository();
 
-  async registerAccount(discordId: string, redditUsername: string, karma: number, accountAgeDays: number) {
-    return this.redditAccountRepo.upsert(discordId, redditUsername, karma, accountAgeDays);
+  async registerAccount(discordId: string, redditUsername: string, karma: number, accountAgeDays: number, redditId?: string) {
+    return this.redditAccountRepo.upsert(discordId, redditUsername, karma, accountAgeDays, redditId);
   }
 
   async getAccount(discordId: string) {
@@ -30,5 +30,9 @@ export class AccountService {
       karma,
       accountAge: accountAgeDays,
     });
+  }
+
+  async updateOAuthTokens(discordId: string, data: { redditId?: string; accessToken?: string; refreshToken?: string; tokenExpiresAt?: Date }) {
+    return this.redditAccountRepo.update(discordId, data);
   }
 }

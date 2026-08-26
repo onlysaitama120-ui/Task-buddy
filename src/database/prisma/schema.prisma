@@ -49,10 +49,14 @@ model RedditAccount {
   id           String   @id @default(cuid())
   userId       String   @unique @map("user_id")
   username     String
+  redditId     String?  @unique @map("reddit_id")
   karma        Int      @default(0)
   accountAge   Int      @default(0) // in days
   isVerified   Boolean  @default(false)
   verifiedAt   DateTime?
+  accessToken  String?  @map("access_token")
+  refreshToken String?  @map("refresh_token")
+  tokenExpiresAt DateTime? @map("token_expires_at")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

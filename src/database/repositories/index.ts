@@ -38,18 +38,18 @@ export class RedditAccountRepository {
     });
   }
 
-  async update(userId: string, data: { karma?: number; accountAge?: number; isVerified?: boolean; verifiedAt?: Date }) {
+  async update(userId: string, data: { karma?: number; accountAge?: number; isVerified?: boolean; verifiedAt?: Date; redditId?: string; accessToken?: string; refreshToken?: string; tokenExpiresAt?: Date }) {
     return prisma.redditAccount.update({
       where: { userId },
       data,
     });
   }
 
-  async upsert(userId: string, username: string, karma: number, accountAge: number) {
+  async upsert(userId: string, username: string, karma: number, accountAge: number, redditId?: string) {
     return prisma.redditAccount.upsert({
       where: { userId },
-      update: { username, karma, accountAge, updatedAt: new Date() },
-      create: { userId, username, karma, accountAge },
+      update: { username, karma, accountAge, updatedAt: new Date(), redditId },
+      create: { userId, username, karma, accountAge, redditId },
     });
   }
 }

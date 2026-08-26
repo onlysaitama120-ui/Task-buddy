@@ -1,15 +1,15 @@
 f = "C:/Users/tk620/task-buddy/src/index.ts"
 d = open(f, "rb").read()
 
-# Fix the regex - it has ////d+ which should be //d+
-old = b"new RegExp('^(////d+)////s*([dwmy])$', 'i')"
-new = b"new RegExp('^(//d+)//s*([dwmy])$', 'i')"
+# Use RegExp constructor to avoid escaping issues
+old = b"const usernameMatch = redditProfile.match(/reddit////.com/////u/////([^/?]+)/i);"
+new = b"const usernameMatch = redditProfile.match(new RegExp('reddit////.com/u/([^/?]+)', 'i'));"
 if old in d:
     d = d.replace(old, new)
     open(f, "wb").write(d)
     print("Fixed!")
 else:
-    print("Not found, searching...")
-    idx = d.find(b"RegExp")
+    print("Not found")
+    idx = d.find(b"usernameMatch")
     if idx >= 0:
-        print(d[idx:idx+80].decode('utf-8', errors='replace'))
+        print(d[idx:idx+100].decode('utf-8', errors='replace'))
