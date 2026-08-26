@@ -13,4 +13,4 @@ RUN npm run build
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=src/database/prisma/schema.prisma && node dist/index.js"]
+CMD ["sh", "-c", "npx prisma db push --schema=src/database/prisma/schema.prisma --accept-data-loss && node dist/index.js"]
