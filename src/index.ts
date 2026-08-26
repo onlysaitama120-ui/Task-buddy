@@ -76,7 +76,11 @@ client.once(Events.ClientReady, async (readyClient) => {
   try {
     const rest = new REST({ version: '10' }).setToken(config.DISCORD_TOKEN);
     
-    // Register commands to ALL guilds instantly (for testing)
+    // Delete old global commands to remove duplicates
+    await rest.put(Routes.applicationCommands(config.DISCORD_CLIENT_ID), { body: [] });
+    console.log('✅ Cleared old global commands');
+    
+    // Register commands to ALL guilds instantly
     for (const guild of readyClient.guilds.cache.values()) {
       await rest.put(Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, guild.id), {
         body: [
