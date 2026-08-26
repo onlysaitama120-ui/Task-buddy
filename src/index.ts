@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Partials, Events, REST, Routes, Collection, ChannelType, ChannelSelectMenuBuilder, ActionRowBuilder, ComponentType } from 'discord.js';
+﻿import { Client, GatewayIntentBits, Partials, Events, REST, Routes, Collection, ChannelType, ChannelSelectMenuBuilder, ActionRowBuilder, ComponentType } from 'discord.js';
 import { loadConfig, getOwnerUserId } from './config';
 import { prisma } from './database/prisma/client';
 import { AccountService } from './services/accountService';
@@ -566,8 +566,8 @@ async function handleSlashCommand(interaction: any) {
 
         const row = new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(channelSelect);
 
-        await interaction.reply({ 
-          content: '🔧 **Task-buddy Setup**/n/nPlease select the channel where task announcements will be posted:', 
+await interaction.reply({ 
+          content: `🔧 **Task-buddy Setup**\n\nPlease select the channel where task announcements will be posted:`, 
           components: [row], 
           ephemeral: true 
         });
@@ -602,7 +602,7 @@ async function handleButton(interaction: any) {
 
 const verification = await verificationService.checkVerification(interaction.user.id, guildId);
         if (!verification.verified) {
-          await interaction.editReply({ content: `❌ You need a verified Reddit account to claim tasks.${verification.reason ? '/n${verification.reason}' : ''}` });
+          await interaction.editReply({ content: `❌ You need a verified Reddit account to claim tasks.${verification.reason ? '/n' + verification.reason : ''}` });
           return;
         }
 
@@ -831,13 +831,22 @@ async function handleSelectMenu(interaction: any) {
         });
 
         await interaction.editReply({ 
-          content: `✅ **Task-buddy setup complete!**/n/n` +
-            `📢 Announcement channel: <#${selectedChannel.id}>/n` +
-            `👑 Task-mod role: <@&${taskModRole.id}> (assign this to moderators)/n` +
-            `📁 Task category: ${taskCategory.name}/n/n` +
-            `Next steps:/n` +
-            `1. Assign the **task-mod** role to your moderators/n` +
-            `2. Use /createbatch to create your first task batch/n` +
+          content: `✅ **Task-buddy setup complete!**
+
+` +
+            `📢 Announcement channel: <#${selectedChannel.id}>
+` +
+            `👑 Task-mod role: <@&${taskModRole.id}> (assign this to moderators)
+` +
+            `📁 Task category: ${taskCategory.name}
+
+` +
+            `Next steps:
+` +
+            `1. Assign the **task-mod** role to your moderators
+` +
+            `2. Use /createbatch to create your first task batch
+` +
             `3. Use /announce to post it in the announcement channel`
         });
         break;
@@ -872,4 +881,5 @@ process.on('SIGTERM', async () => {
 });
 
 client.login(config.DISCORD_TOKEN);
+
 

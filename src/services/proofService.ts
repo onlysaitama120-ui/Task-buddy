@@ -23,10 +23,10 @@ export class ProofService {
   }
 
   static formatProofSubmittedMessage(payAmount: number): string {
-    return `✅ Proof submitted!/n/n💰 Earned: $${payAmount.toFixed(2)}/nPayment due.`;
+    return `✅ Proof submitted!\n\n💰 Earned: $${payAmount.toFixed(2)}\nPayment due.`;
   }
 
   static formatInvalidProofMessage(): string {
-    return '❌ Invalid proof link./nPlease submit a valid Reddit URL.';
+    return '❌ Invalid proof link.\nPlease submit a valid Reddit URL.';
   }
 }
