@@ -3,11 +3,13 @@ FROM node:18-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
-COPY dist ./dist
+COPY src ./src
+COPY tsconfig.json ./
+RUN npm run build
+
 COPY src/database/prisma ./src/database/prisma
-
 RUN npx prisma generate --schema=src/database/prisma/schema.prisma
 
 EXPOSE 3000
