@@ -241,12 +241,13 @@ for (const url of urls) {
 });
 
 function parseAccountAge(input: string): number {
-  const match = input.match(/^(\d+)([dwmy])$/i);
+  const cleaned = input.trim().toLowerCase();
+  const match = cleaned.match(new RegExp('^(////d+)////s*([dwmy])$', 'i'));
   if (!match) {
-    throw new Error('Invalid format. Use: 30d, 4w, 6m, 1y (days, weeks, months, years)');
+    throw new Error('Invalid format. Use: 30d, 4w, 6m, 1y (days, weeks, months, years). Examples: 30d, 4w, 6m, 1y, 2w, 3m');
   }
   const value = parseInt(match[1]);
-  const unit = match[2].toLowerCase();
+  const unit = match[2];
   switch (unit) {
     case 'd': return value;
     case 'w': return value * 7;
@@ -254,9 +255,7 @@ function parseAccountAge(input: string): number {
     case 'y': return value * 365;
     default: throw new Error('Invalid unit. Use d, w, m, or y');
   }
-}
-
-async function handleSlashCommand(interaction: any) {
+}async function handleSlashCommand(interaction: any) {
   const { commandName, options, user, member, guild } = interaction;
 
   try {
