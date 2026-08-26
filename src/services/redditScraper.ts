@@ -27,25 +27,31 @@ export class RedditScraperService {
       const url = `https://www.reddit.com/user/${username}/about.json`;
       const response = await fetch(url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': this.userAgent,
           'Accept': 'application/json',
         },
         redirect: 'follow',
       });
 
       console.log(`[RedditScraper] Reddit API response: ${response.status} ${response.statusText}`);
+      console.log(`[RedditScraper] Content-Type: ${response.headers.get('content-type')}`);
       
       if (response.ok) {
-        const data: any = await response.json();
-        if (data.data) {
-          console.log(`[RedditScraper] Successfully fetched via Reddit JSON API`);
-          return {
-            name: data.data.name,
-            link_karma: data.data.link_karma || 0,
-            comment_karma: data.data.comment_karma || 0,
-            created_utc: data.data.created_utc || 0,
-            id: data.data.id || username,
-          };
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data: any = await response.json();
+          if (data.data) {
+            console.log(`[RedditScraper] Successfully fetched via Reddit JSON API`);
+            return {
+              name: data.data.name,
+              link_karma: data.data.link_karma || 0,
+              comment_karma: data.data.comment_karma || 0,
+              created_utc: data.data.created_utc || 0,
+              id: data.data.id || username,
+            };
+          }
+        } else {
+          console.log(`[RedditScraper] Reddit API returned non-JSON: ${contentType}`);
         }
       } else {
         console.log(`[RedditScraper] Reddit API failed: ${response.status} ${response.statusText}`);
@@ -69,16 +75,21 @@ export class RedditScraperService {
       console.log(`[RedditScraper] Old Reddit API response: ${response.status} ${response.statusText}`);
       
       if (response.ok) {
-        const data: any = await response.json();
-        if (data.data) {
-          console.log(`[RedditScraper] Successfully fetched via old.reddit.com JSON API`);
-          return {
-            name: data.data.name,
-            link_karma: data.data.link_karma || 0,
-            comment_karma: data.data.comment_karma || 0,
-            created_utc: data.data.created_utc || 0,
-            id: data.data.id || username,
-          };
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data: any = await response.json();
+          if (data.data) {
+            console.log(`[RedditScraper] Successfully fetched via old.reddit.com JSON API`);
+            return {
+              name: data.data.name,
+              link_karma: data.data.link_karma || 0,
+              comment_karma: data.data.comment_karma || 0,
+              created_utc: data.data.created_utc || 0,
+              id: data.data.id || username,
+            };
+          }
+        } else {
+          console.log(`[RedditScraper] Old Reddit API returned non-JSON: ${contentType}`);
         }
       } else {
         console.log(`[RedditScraper] Old Reddit API failed: ${response.status} ${response.statusText}`);
