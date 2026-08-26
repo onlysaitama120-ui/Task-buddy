@@ -242,7 +242,7 @@ for (const url of urls) {
 
 function parseAccountAge(input: string): number {
   const cleaned = input.trim().toLowerCase();
-  const match = cleaned.match(new RegExp('^(////d+)////s*([dwmy])$', 'i'));
+  const match = cleaned.match(new RegExp('^(//d+)//s*([dwmy])$', 'i'));
   if (!match) {
     throw new Error('Invalid format. Use: 30d, 4w, 6m, 1y (days, weeks, months, years). Examples: 30d, 4w, 6m, 1y, 2w, 3m');
   }
