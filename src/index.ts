@@ -11,8 +11,25 @@ import { isTaskMod, requireTaskMod, isOwner, requireOwner, requireAuthorizedGuil
 import { createBatchAnnouncementEmbed, createTaskTicketEmbed, createTaskStatsEmbed, createVerificationStatusEmbed, createBatchListEmbed } from './utils/embeds';
 import { TaskType, BatchStatus, TaskStatus } from '@prisma/client';
 import { AuthorizedGuildRepository } from './database/repositories';
+import express from 'express';
 
 const config = loadConfig();
+
+// Health check server for deployment platforms
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/', (req, res) => {
+  res.json({ name: 'Task-buddy', status: 'running' });
+});
+
+const healthServer = app.listen(PORT, () => {
+  console.log(`🏥 Health check server listening on port ${PORT}`);
+});
 
 const client = new Client({
   intents: [
@@ -843,6 +860,15 @@ process.on('unhandledRejection', (error) => {
 
 process.on('uncaughtException', (error) => {
   console.error('Uncaught exception:', error);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  healthServer.close(() => {
+    console.log('Health server closed');
+    process.exit(0);
+  });
+  await client.destroy();
 });
 
 client.login(config.DISCORD_TOKEN);
