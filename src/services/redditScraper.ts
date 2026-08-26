@@ -10,8 +10,8 @@ export interface RedditUserInfo {
 
 export class RedditScraperService {
   private config = getConfig();
-  private baseUrl = 'https://old.reddit.com';
-  private userAgent = 'Task-buddy/1.0';
+  private baseUrl = 'https://www.reddit.com';
+  private userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   extractUsername(profileUrl: string): string | null {
     const match = profileUrl.match(new RegExp("reddit////.com///u///([^/?]+)", "i"));
@@ -19,13 +19,74 @@ export class RedditScraperService {
   }
 
   async fetchUserInfo(username: string): Promise<RedditUserInfo | null> {
+    // Try Reddit's public JSON API first (most reliable)
     try {
-      const url = `${this.baseUrl}/user/${username}`;
+      const url = `${this.baseUrl}/user/${username}/about.json`;
       const response = await fetch(url, {
         headers: {
           'User-Agent': this.userAgent,
-          'Accept': 'text/html',
+          'Accept': 'application/json',
         },
+        redirect: 'follow',
+      });
+
+      if (response.ok) {
+        const data: any = await response.json();
+        if (data.data) {
+          return {
+            name: data.data.name,
+            link_karma: data.data.link_karma || 0,
+            comment_karma: data.data.comment_karma || 0,
+            created_utc: data.data.created_utc || 0,
+            id: data.data.id || username,
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Reddit JSON API error:', error);
+    }
+
+    // Fallback: Try old.reddit.com JSON endpoint
+    try {
+      const url = `https://old.reddit.com/user/${username}/about.json`;
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': this.userAgent,
+          'Accept': 'application/json',
+        },
+        redirect: 'follow',
+      });
+
+      if (response.ok) {
+        const data: any = await response.json();
+        if (data.data) {
+          return {
+            name: data.data.name,
+            link_karma: data.data.link_karma || 0,
+            comment_karma: data.data.comment_karma || 0,
+            created_utc: data.data.created_utc || 0,
+            id: data.data.id || username,
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Old Reddit JSON API error:', error);
+    }
+
+    // Fallback: Scrape old.reddit.com HTML
+    try {
+      const url = `https://old.reddit.com/user/${username}`;
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': this.userAgent,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+        },
+        redirect: 'follow',
       });
 
       if (!response.ok) {
@@ -36,16 +97,16 @@ export class RedditScraperService {
       const html = await response.text();
       return this.parseUserInfo(html, username);
     } catch (error) {
-      console.error('Scraper error:', error);
-      return null;
+      console.error('HTML scraper error:', error);
     }
+
+    return null;
   }
 
   private parseUserInfo(html: string, username: string): RedditUserInfo | null {
     try {
       let totalKarma = 0;
-      let linkKarma = 0;
-      let commentKarma = 0;
+      let createdUtc = 0;
 
       // Try JSON-LD structured data
       const jsonLdStart = html.indexOf('<script type="application/ld+json">');
@@ -69,7 +130,6 @@ export class RedditScraperService {
       }
 
       // Try to find account creation date
-      let createdUtc = 0;
       const cakeDayMatch = html.match(new RegExp("cake day[^>]*>([^<]+)<", "i"));
       if (cakeDayMatch) {
         const dateStr = cakeDayMatch[1].trim();
