@@ -85,7 +85,7 @@ client.once(Events.ClientReady, async (readyClient) => {
           options: [
             { name: 'username', description: 'Your Reddit username (without u/)', type: 3, required: true },
             { name: 'karma', description: 'Your Reddit karma', type: 4, required: true },
-            { name: 'account_age', description: 'Your Reddit account age in days', type: 4, required: true },
+            { name: 'account_age', description: 'Account age (e.g., 30d, 4w, 6m, 1y)', type: 3, required: true },
           ],
         },
         {
@@ -106,7 +106,7 @@ client.once(Events.ClientReady, async (readyClient) => {
             { name: 'task_count', description: 'Number of tasks in this batch', type: 4, required: true },
             { name: 'pay_per_task', description: 'Payment per task in USD', type: 10, required: true },
             { name: 'min_karma', description: 'Minimum karma required', type: 4, required: false },
-            { name: 'min_account_age', description: 'Minimum account age in days', type: 4, required: false },
+            { name: 'min_account_age', description: 'Minimum account age (e.g., 30d, 4w, 6m, 1y)', type: 3, required: false },
           ],
         },
         {
@@ -157,7 +157,7 @@ client.once(Events.ClientReady, async (readyClient) => {
             { name: 'task_mod_role', description: 'Task moderator role', type: 8, required: false },
             { name: 'task_category', description: 'Task category', type: 7, required: false },
             { name: 'min_karma', description: 'Minimum karma', type: 4, required: false },
-            { name: 'min_account_age', description: 'Minimum account age (days)', type: 4, required: false },
+            { name: 'min_account_age', description: 'Minimum account age (e.g., 30d, 4w, 6m, 1y)', type: 3, required: false },
             { name: 'task_deadline', description: 'Task deadline (minutes)', type: 4, required: false },
           ],
         },
@@ -236,9 +236,25 @@ for (const url of urls) {
           await message.reply(ProofService.formatProofSubmittedMessage(Number(claim.payAmount)));
         }
         return;
-      }
-    }
+}
+  }
 });
+
+function parseAccountAge(input: string): number {
+  const match = input.match(/^(\d+)([dwmy])$/i);
+  if (!match) {
+    throw new Error('Invalid format. Use: 30d, 4w, 6m, 1y (days, weeks, months, years)');
+  }
+  const value = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+  switch (unit) {
+    case 'd': return value;
+    case 'w': return value * 7;
+    case 'm': return value * 30;
+    case 'y': return value * 365;
+    default: throw new Error('Invalid unit. Use d, w, m, or y');
+  }
+}
 
 async function handleSlashCommand(interaction: any) {
   const { commandName, options, user, member, guild } = interaction;
@@ -248,7 +264,8 @@ async function handleSlashCommand(interaction: any) {
       case 'register': {
         const username = stripRedditPrefix(options.getString('username'));
         const karma = options.getInteger('karma');
-        const accountAge = options.getInteger('account_age');
+        const accountAgeStr = options.getString('account_age');
+        const accountAge = parseAccountAge(accountAgeStr);
 
         await accountService.registerAccount(user.id, username, karma, accountAge);
         const guildId = interaction.guildId!;
@@ -276,7 +293,8 @@ async function handleSlashCommand(interaction: any) {
         const taskCount = options.getInteger('task_count');
         const payPerTask = options.getNumber('pay_per_task');
         const minKarma = options.getInteger('min_karma') ?? config.MIN_REDDIT_KARMA;
-        const minAccountAge = options.getInteger('min_account_age') ?? config.MIN_REDDIT_ACCOUNT_AGE_DAYS;
+        const minAccountAgeStr = options.getString('min_account_age');
+        const minAccountAge = minAccountAgeStr ? parseAccountAge(minAccountAgeStr) : config.MIN_REDDIT_ACCOUNT_AGE_DAYS;
 
         const modal = {
           customId: `create_batch_modal:${name}:${type}:${taskCount}:${payPerTask}:${minKarma}:${minAccountAge}`,
@@ -510,7 +528,8 @@ async function handleSlashCommand(interaction: any) {
         const taskModRole = options.getRole('task_mod_role');
         const taskCategory = options.getChannel('task_category');
         const minKarma = options.getInteger('min_karma');
-        const minAccountAge = options.getInteger('min_account_age');
+        const minAccountAgeStr = options.getString('min_account_age');
+        const minAccountAge = minAccountAgeStr ? parseAccountAge(minAccountAgeStr) : undefined;
         const taskDeadline = options.getInteger('task_deadline');
 
         const updates: any = {};
