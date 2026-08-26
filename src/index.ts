@@ -86,9 +86,12 @@ client.once(Events.ClientReady, async (readyClient) => {
         body: [
         {
           name: 'register',
-          description: 'Register and verify your Reddit account via OAuth',
+          description: 'Register your Reddit account (auto-verify via profile URL or manual entry)',
           options: [
-            { name: 'reddit_profile', description: 'Your Reddit profile URL (e.g., https://reddit.com/u/username)', type: 3, required: true },
+            { name: 'reddit_profile', description: 'Your Reddit profile URL (e.g., https://reddit.com/u/username) - auto-verifies if public', type: 3, required: false },
+            { name: 'username', description: 'Your Reddit username (without u/) - manual entry if profile is private', type: 3, required: false },
+            { name: 'karma', description: 'Your Reddit karma - required if using manual entry', type: 4, required: false },
+            { name: 'account_age', description: 'Account age (e.g., 30d, 4w, 6m, 1y) - required if using manual entry', type: 3, required: false },
           ],
         },
         {
@@ -265,37 +268,64 @@ function parseAccountAge(input: string): number {
     switch (commandName) {
       case 'register': {
         const redditProfile = options.getString('reddit_profile');
-        const usernameMatch = redditProfile.match(new RegExp('reddit////.com/u/([^/?]+)', 'i'));
-        const username = usernameMatch ? usernameMatch[1] : stripRedditPrefix(redditProfile);
+        const username = options.getString('username');
+        const karma = options.getInteger('karma');
+        const accountAgeStr = options.getString('account_age');
         
-        await interaction.deferReply({ ephemeral: true });
-        
-        const redditScraper = new RedditScraperService();
-        const userInfo = await redditScraper.fetchUserInfo(username);
-        
-        if (!userInfo) {
-          await interaction.editReply({ content: '❌ Could not fetch Reddit profile. Make sure the profile is public and the username is correct.' });
-          return;
+        // Mode 1: Auto-verify via Reddit profile URL
+        if (redditProfile) {
+          await interaction.deferReply({ ephemeral: true });
+          
+          const usernameMatch = redditProfile.match(new RegExp('reddit////.com/u/([^/?]+)', 'i'));
+          const extractedUsername = usernameMatch ? usernameMatch[1] : stripRedditPrefix(redditProfile);
+          
+          const redditScraper = new RedditScraperService();
+          const userInfo = await redditScraper.fetchUserInfo(extractedUsername);
+          
+          if (!userInfo) {
+            await interaction.editReply({ content: '❌ Could not fetch Reddit profile. Make sure the profile is public and the username is correct.' });
+            return;
+          }
+          
+          const config = getConfig();
+          const verification = redditScraper.verifyUser(userInfo, config.MIN_REDDIT_KARMA, config.MIN_REDDIT_ACCOUNT_AGE_DAYS);
+          
+          if (!verification.verified) {
+            await interaction.editReply({ content: `❌ Verification failed: ${verification.reason}` });
+            return;
+          }
+          
+          const accountAgeDays = Math.floor((Date.now() / 1000 - userInfo.created_utc) / 86400);
+          const totalKarma = userInfo.link_karma + userInfo.comment_karma;
+          
+          await accountService.registerAccount(user.id, userInfo.name, totalKarma, accountAgeDays);
+          
+          const guildId = interaction.guildId!;
+          const status = await verificationService.getVerificationStatus(user.id, guildId);
+          
+          await interaction.editReply({ 
+            content: `✅ Verified! u/${userInfo.name} | Karma: ${totalKarma} | Account age: ${accountAgeDays} days` 
+          });
+          break;
         }
         
-        const config = getConfig();
-        const verification = redditScraper.verifyUser(userInfo, config.MIN_REDDIT_KARMA, config.MIN_REDDIT_ACCOUNT_AGE_DAYS);
-        
-        if (!verification.verified) {
-          await interaction.editReply({ content: `❌ Verification failed: ${verification.reason}` });
-          return;
+        // Mode 2: Manual entry (for private profiles)
+        if (username && karma !== null && accountAgeStr) {
+          const accountAge = parseAccountAge(accountAgeStr);
+          
+          await accountService.registerAccount(user.id, username, karma, accountAge);
+          
+          const guildId = interaction.guildId!;
+          const status = await verificationService.getVerificationStatus(user.id, guildId);
+          
+          await interaction.reply({ embeds: [createVerificationStatusEmbed(status)], ephemeral: true });
+          break;
         }
         
-        const accountAgeDays = Math.floor((Date.now() / 1000 - userInfo.created_utc) / 86400);
-        const totalKarma = userInfo.link_karma + userInfo.comment_karma;
-        
-        await accountService.registerAccount(user.id, userInfo.name, totalKarma, accountAgeDays);
-        
-        const guildId = interaction.guildId!;
-        const status = await verificationService.getVerificationStatus(user.id, guildId);
-        
-        await interaction.editReply({ 
-          content: `✅ Verified! u/${userInfo.name} | Karma: ${totalKarma} | Account age: ${accountAgeDays} days` 
+        // Neither mode complete
+        await interaction.reply({ 
+          content: '❌ Provide either:/n• `reddit_profile` (Reddit profile URL for auto-verification)/n• OR `username` + `karma` + `account_age` (manual entry for private profiles)', 
+          ephemeral: true 
         });
         break;
       }
