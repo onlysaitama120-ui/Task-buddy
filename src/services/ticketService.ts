@@ -12,7 +12,7 @@ export class TicketService {
     this.client = client;
   }
 
-  private async getOrCreateTaskModRole(guild: Guild, guildId: string): Promise<Role> {
+  private async getTaskModRole(guild: Guild, guildId: string): Promise<Role> {
     const botConfig = await this.configRepo.get(guildId);
     
     // Check if role exists in config
@@ -81,10 +81,10 @@ export class TicketService {
       throw new Error('Claim not found');
     }
 
-    // Auto-create task-mod role if needed
-    const taskModRole = await this.getOrCreateTaskModRole(guild, guildId);
+    // Get or create task-mod role
+    const taskModRole = await this.getTaskModRole(guild, guildId);
     
-    // Auto-create task category if needed
+    // Get or create task category
     const category = await this.getOrCreateTaskCategory(guild, taskModRole, guildId);
 
     const channelName = `task-${member.username}-${claim.id.slice(-4)}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');

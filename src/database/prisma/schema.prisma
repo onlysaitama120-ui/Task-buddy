@@ -62,8 +62,21 @@ model RedditAccount {
   @@map("reddit_accounts")
 }
 
+model AuthorizedGuild {
+  id            String   @id @default(cuid())
+  guildId       String   @unique @map("guild_id")
+  enabled       Boolean  @default(true)
+  authorizedAt  DateTime @default(now()) @map("authorized_at")
+  authorizedBy  String   @map("authorized_by")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("authorized_guilds")
+}
+
 model TaskBatch {
   id              String       @id @default(cuid())
+  guildId         String       @map("guild_id")
   name            String
   type            TaskType
   taskCount       Int
@@ -80,6 +93,7 @@ model TaskBatch {
   tasks           Task[]
   claims          TaskClaim[]
 
+  @@index([guildId])
   @@map("task_batches")
 }
 
@@ -89,7 +103,7 @@ model Task {
   comment     String
   redditLink  String      @map("reddit_link")
   status      TaskStatus  @default(AVAILABLE)
-  assignedTo  String?     @unique @map("assigned_to")
+  assignedTo  String?     @map("assigned_to")
   claimedAt   DateTime?   @map("claimed_at")
   dueAt       DateTime?   @map("due_at")
   createdAt   DateTime    @default(now())

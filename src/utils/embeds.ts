@@ -21,7 +21,8 @@ export function createBatchAnnouncementEmbed(batch: {
       { name: '🏅 Task Type', value: `${typeEmoji} ${typeName}`, inline: true },
       { name: '👥 Taskers Needed', value: `${batch.availableCount} / ${batch.taskCount}`, inline: true },
       { name: '💰 Pay', value: `$${batch.payPerTask.toFixed(2)} / task`, inline: true },
-      { name: '📋 Requirements', value: `Min Karma: ${batch.minKarma}/nMin Account Age: ${batch.minAccountAge} days`, inline: true }
+      { name: '📋 Requirements', value: `Min Karma: ${batch.minKarma}
+Min Account Age: ${batch.minAccountAge} days`, inline: true }
     )
     .setFooter({ text: 'Click the button below to claim a task' })
     .setTimestamp();

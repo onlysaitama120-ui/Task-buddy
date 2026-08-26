@@ -1,9 +1,13 @@
 import { z } from 'zod';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 const envSchema = z.object({
   DISCORD_TOKEN: z.string().min(1, 'DISCORD_TOKEN is required'),
   DISCORD_CLIENT_ID: z.string().min(1, 'DISCORD_CLIENT_ID is required'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  OWNER_USER_ID: z.string().min(1, 'OWNER_USER_ID is required'),
   MIN_REDDIT_KARMA: z.coerce.number().int().positive().default(100),
   MIN_REDDIT_ACCOUNT_AGE_DAYS: z.coerce.number().int().positive().default(30),
   TASK_DEADLINE_MINUTES: z.coerce.number().int().positive().default(30),
@@ -32,4 +36,8 @@ export function getConfig(): Config {
     return loadConfig();
   }
   return config;
+}
+
+export function getOwnerUserId(): string {
+  return getConfig().OWNER_USER_ID;
 }

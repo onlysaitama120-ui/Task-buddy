@@ -1,5 +1,5 @@
-import { Client, GatewayIntentBits, Partials, Events, REST, Routes, Collection } from 'discord.js';
-import { loadConfig } from './config';
+import { Client, GatewayIntentBits, Partials, Events, REST, Routes, Collection, ChannelType, ChannelSelectMenuBuilder, ActionRowBuilder, ComponentType } from 'discord.js';
+import { loadConfig, getOwnerUserId } from './config';
 import { prisma } from './database/prisma/client';
 import { AccountService } from './services/accountService';
 import { VerificationService } from './services/verificationService';
@@ -7,9 +7,10 @@ import { TaskService } from './services/taskService';
 import { TicketService } from './services/ticketService';
 import { ProofService } from './services/proofService';
 import { StatisticsService } from './services/statisticsService';
-import { isTaskMod, requireTaskMod } from './permissions';
+import { isTaskMod, requireTaskMod, isOwner, requireOwner, requireAuthorizedGuild } from './permissions';
 import { createBatchAnnouncementEmbed, createTaskTicketEmbed, createTaskStatsEmbed, createVerificationStatusEmbed, createBatchListEmbed } from './utils/embeds';
 import { TaskType, BatchStatus, TaskStatus } from '@prisma/client';
+import { AuthorizedGuildRepository } from './database/repositories';
 
 const config = loadConfig();
 
@@ -141,28 +142,22 @@ client.once(Events.ClientReady, async (readyClient) => {
           ],
         },
         {
-          name: 'set',
-          description: 'Set up Task-buddy channels and roles (task-mod only)',
+          name: 'authorize',
+          description: 'Authorize a guild to use Task-buddy (bot owner only)',
           options: [
-            {
-              name: 'announcement',
-              description: 'Set the current channel as the announcement channel',
-              type: 1,
-              options: [],
-            },
+            { name: 'guild_id', description: 'Guild ID to authorize', type: 3, required: true },
+          ],
+        },
+        {
+          name: 'deauthorize',
+          description: 'Deauthorize a guild from using Task-buddy (bot owner only)',
+          options: [
+            { name: 'guild_id', description: 'Guild ID to deauthorize', type: 3, required: true },
           ],
         },
         {
           name: 'setup',
           description: 'Initial server setup for Task-buddy (server admin only)',
-          options: [
-            {
-              name: 'announcement_channel',
-              description: 'Channel for task announcements',
-              type: 7,
-              required: true,
-            },
-          ],
         },
       ],
     });
@@ -179,6 +174,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await handleButton(interaction);
   } else if (interaction.isModalSubmit()) {
     await handleModal(interaction);
+  } else if (interaction.isStringSelectMenu() || interaction.isChannelSelectMenu()) {
+    await handleSelectMenu(interaction);
   }
 });
 
@@ -249,6 +246,9 @@ async function handleSlashCommand(interaction: any) {
       case 'createbatch': {
         requireTaskMod(member);
 
+        const guildId = interaction.guildId!;
+        await requireAuthorizedGuild(guildId);
+
         const name = options.getString('name');
         const type = options.getString('type') as TaskType;
         const taskCount = options.getInteger('task_count');
@@ -283,6 +283,9 @@ async function handleSlashCommand(interaction: any) {
 
       case 'addtasks': {
         requireTaskMod(member);
+
+        const guildId = interaction.guildId!;
+        await requireAuthorizedGuild(guildId);
 
         const batchId = options.getString('batch_id');
         const tasksJson = options.getString('tasks');
@@ -321,6 +324,9 @@ async function handleSlashCommand(interaction: any) {
       case 'announce': {
         requireTaskMod(member);
 
+        const guildId = interaction.guildId!;
+        await requireAuthorizedGuild(guildId);
+
         const batchId = options.getString('batch_id');
         const batch = await taskService.getBatchById(batchId);
 
@@ -334,7 +340,6 @@ async function handleSlashCommand(interaction: any) {
           return;
         }
 
-        const guildId = interaction.guildId!;
         const botConfig = await taskService.configRepo.get(guildId);
         const announcementChannelId = botConfig?.announcementChannelId;
         
@@ -373,7 +378,10 @@ async function handleSlashCommand(interaction: any) {
       case 'batches': {
         requireTaskMod(member);
 
-        const batches = await taskService.getAllBatches();
+        const guildId = interaction.guildId!;
+        await requireAuthorizedGuild(guildId);
+
+        const batches = await taskService.getAllBatches(guildId);
         const batchData = await Promise.all(batches.map(async (b) => ({
           id: b.id,
           name: b.name,
@@ -391,9 +399,17 @@ async function handleSlashCommand(interaction: any) {
       case 'complete': {
         requireTaskMod(member);
 
+        const guildId = interaction.guildId!;
+        await requireAuthorizedGuild(guildId);
+
         const claimId = options.getString('claim_id');
+        const claim = await taskService.getClaimById(claimId);
+        if (!claim) {
+          await interaction.reply({ content: '❌ Claim not found', ephemeral: true });
+          return;
+        }
         await taskService.completeTask(claimId, user.id);
-        await statisticsService.recordCompletion(user.id, 0);
+        await statisticsService.recordCompletion(claim.userId, Number(claim.payAmount));
 
         await interaction.reply({ content: '✅ Task marked as completed', ephemeral: true });
         break;
@@ -402,15 +418,26 @@ async function handleSlashCommand(interaction: any) {
       case 'timeout': {
         requireTaskMod(member);
 
+        const guildId = interaction.guildId!;
+        await requireAuthorizedGuild(guildId);
+
         const claimId = options.getString('claim_id');
+        const claim = await taskService.getClaimById(claimId);
+        if (!claim) {
+          await interaction.reply({ content: '❌ Claim not found', ephemeral: true });
+          return;
+        }
         await taskService.timeoutTask(claimId, user.id);
-        await statisticsService.recordTimeout(user.id);
+        await statisticsService.recordTimeout(claim.userId);
 
         await interaction.reply({ content: '⏰ Task marked as timed out', ephemeral: true });
         break;
       }
 
       case 'taskstats': {
+        const guildId = interaction.guildId!;
+        await requireAuthorizedGuild(guildId);
+        
         const targetUser = options.getUser('member') ?? user;
         const stats = await statisticsService.getUserStatistics(targetUser.id);
         const memberObj = await guild.members.fetch(targetUser.id).catch(() => null);
@@ -419,8 +446,43 @@ async function handleSlashCommand(interaction: any) {
         break;
       }
 
+      case 'authorize': {
+        requireOwner(user.id);
+
+        const guildId = options.getString('guild_id');
+        if (!guildId) {
+          await interaction.reply({ content: '❌ Guild ID is required.', ephemeral: true });
+          return;
+        }
+
+        const authorizedGuildRepo = new AuthorizedGuildRepository();
+        await authorizedGuildRepo.authorize(guildId, user.id);
+
+        await interaction.reply({ content: `✅ Guild ${guildId} has been authorized.`, ephemeral: true });
+        break;
+      }
+
+      case 'deauthorize': {
+        requireOwner(user.id);
+
+        const guildId = options.getString('guild_id');
+        if (!guildId) {
+          await interaction.reply({ content: '❌ Guild ID is required.', ephemeral: true });
+          return;
+        }
+
+        const authorizedGuildRepo = new AuthorizedGuildRepository();
+        await authorizedGuildRepo.deauthorize(guildId);
+
+        await interaction.reply({ content: `✅ Guild ${guildId} has been deauthorized.`, ephemeral: true });
+        break;
+      }
+
       case 'config': {
         requireTaskMod(member);
+
+        const guildId = interaction.guildId!;
+        await requireAuthorizedGuild(guildId);
 
         const announcementChannel = options.getChannel('announcement_channel');
         const taskModRole = options.getRole('task_mod_role');
@@ -442,7 +504,6 @@ async function handleSlashCommand(interaction: any) {
           return;
         }
 
-        const guildId = interaction.guildId!;
         await taskService.configRepo.upsert(guildId, updates);
         await interaction.reply({ content: '✅ Configuration updated', ephemeral: true });
         break;
@@ -450,6 +511,9 @@ async function handleSlashCommand(interaction: any) {
 
       case 'set': {
         requireTaskMod(member);
+
+        const guildId = interaction.guildId!;
+        await requireAuthorizedGuild(guildId);
 
         const subcommand = options.getSubcommand();
         if (subcommand === 'announcement') {
@@ -459,7 +523,6 @@ async function handleSlashCommand(interaction: any) {
             return;
           }
 
-          const guildId = interaction.guildId!;
           await taskService.configRepo.upsert(guildId, { announcementChannelId: channel.id });
           await interaction.reply({ content: `✅ Announcement channel set to <#${channel.id}>`, ephemeral: true });
         }
@@ -473,63 +536,29 @@ async function handleSlashCommand(interaction: any) {
           return;
         }
 
-        const announcementChannel = options.getChannel('announcement_channel');
-        if (!announcementChannel || !announcementChannel.isTextBased()) {
-          await interaction.reply({ content: '❌ Please select a valid text channel for announcements.', ephemeral: true });
-          return;
-        }
-
-        await interaction.deferReply({ ephemeral: true });
-
         const guildId = interaction.guildId!;
-        const guild = interaction.guild!;
+        await requireAuthorizedGuild(guildId);
 
-        // Create task-mod role if it doesn't exist
-        let taskModRole = guild.roles.cache.find((r: any) => r.name === 'task-mod');
-        if (!taskModRole) {
-          taskModRole = await guild.roles.create({
-            name: 'task-mod',
-            color: 0x0099ff,
-            reason: 'Task-buddy: Auto-created task moderator role during setup',
-          });
-        }
+        // Create channel select menu for announcement channel
+        const channelSelect = new ChannelSelectMenuBuilder()
+          .setCustomId(`setup_announcement_channel:${guildId}`)
+          .setPlaceholder('Select the announcement channel')
+          .setChannelTypes([ChannelType.GuildText])
+          .setMinValues(1)
+.setMaxValues(1);
 
-        // Create Task-buddy category if it doesn't exist
-        let taskCategory = guild.channels.cache.find((c: any) => c.name === 'Task-buddy' && c.type === 4); // 4 = GuildCategory
-        if (!taskCategory) {
-          taskCategory = await guild.channels.create({
-            name: 'Task-buddy',
-            type: 4, // GuildCategory
-            permissionOverwrites: [
-              {
-                id: guild.roles.everyone.id,
-                deny: ['ViewChannel'],
-              },
-              {
-                id: taskModRole.id,
-                allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
-              },
-            ],
-          });
-        }
+        const row = new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(channelSelect);
 
-        // Save all configuration
-        await taskService.configRepo.upsert(guildId, {
-          announcementChannelId: announcementChannel.id,
-          taskModRoleId: taskModRole.id,
-          taskCategoryId: taskCategory.id,
+        await interaction.reply({ 
+          content: '🔧 **Task-buddy Setup**/n/nPlease select the channel where task announcements will be posted:', 
+          components: [row], 
+          ephemeral: true 
         });
+        break;
+      }
 
-        await interaction.editReply({ 
-          content: `✅ **Task-buddy setup complete!**/n/n` +
-            `📢 Announcement channel: <#${announcementChannel.id}>/n` +
-            `👑 Task-mod role: <@&${taskModRole.id}> (assign this to moderators)/n` +
-            `📁 Task category: ${taskCategory.name}/n/n` +
-            `Next steps:/n` +
-            `1. Assign the **task-mod** role to your moderators/n` +
-            `2. Use /createbatch to create your first task batch/n` +
-            `3. Use /announce to post it in the announcement channel`
-        });
+      case 'setup_announcement_channel': {
+        // This is handled in handleSelectMenu
         break;
       }
     }
@@ -554,7 +583,7 @@ async function handleButton(interaction: any) {
         const guildId = interaction.guildId!;
         await interaction.deferReply({ ephemeral: true });
 
-        const verification = await verificationService.checkVerification(interaction.user.id, guildId);
+const verification = await verificationService.checkVerification(interaction.user.id, guildId);
         if (!verification.verified) {
           await interaction.editReply({ content: `❌ You need a verified Reddit account to claim tasks.${verification.reason ? '/n${verification.reason}' : ''}` });
           return;
@@ -584,7 +613,7 @@ async function handleButton(interaction: any) {
           return;
         }
 
-        const { claim, task } = await taskService.claimTask(batchId, interaction.user.id, redditAccount.id);
+        const { claim, task } = await taskService.claimTask(batchId, interaction.user.id, redditAccount.id, guildId);
 
         const guild = interaction.guild!;
         const ticketChannel = await ticketService.createTicket(claim.id, interaction.user, guild, guildId);
@@ -701,6 +730,7 @@ async function handleModal(interaction: any) {
           minKarma,
           minAccountAge,
           createdBy: interaction.user.id,
+          guildId: interaction.guildId!,
           tasks,
         });
 
@@ -719,6 +749,94 @@ async function handleModal(interaction: any) {
   }
 }
 
+async function handleSelectMenu(interaction: any) {
+  const [action, guildId] = interaction.customId.split(':');
+
+  try {
+    switch (action) {
+      case 'setup_announcement_channel': {
+        if (!interaction.guildId || interaction.guildId !== guildId) {
+          await interaction.reply({ content: '❌ Invalid guild.', ephemeral: true });
+          return;
+        }
+
+        if (!interaction.member?.permissions.has('Administrator') && interaction.guild?.ownerId !== interaction.user.id) {
+          await interaction.reply({ content: '❌ Only server administrators can run initial setup.', ephemeral: true });
+          return;
+        }
+
+        await requireAuthorizedGuild(guildId);
+
+        const selectedChannel = interaction.channels.first();
+        if (!selectedChannel || !selectedChannel.isTextBased()) {
+          await interaction.reply({ content: '❌ Please select a valid text channel.', ephemeral: true });
+          return;
+        }
+
+        await interaction.deferReply({ ephemeral: true });
+
+        const guild = interaction.guild!;
+
+        // Create task-mod role if it doesn't exist
+        let taskModRole = guild.roles.cache.find((r: any) => r.name === 'task-mod');
+        if (!taskModRole) {
+          taskModRole = await guild.roles.create({
+            name: 'task-mod',
+            color: 0x0099ff,
+            reason: 'Task-buddy: Auto-created task moderator role during setup',
+          });
+        }
+
+        // Create Task-buddy category if it doesn't exist
+        let taskCategory = guild.channels.cache.find((c: any) => c.name === 'Task-buddy' && c.type === 4);
+        if (!taskCategory) {
+          taskCategory = await guild.channels.create({
+            name: 'Task-buddy',
+            type: 4,
+            permissionOverwrites: [
+              {
+                id: guild.roles.everyone.id,
+                deny: ['ViewChannel'],
+              },
+              {
+                id: taskModRole.id,
+                allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+              },
+            ],
+          });
+        }
+
+// Save all configuration
+        await taskService.configRepo.upsert(guildId, {
+          announcementChannelId: selectedChannel.id,
+          taskModRoleId: taskModRole.id,
+          taskCategoryId: taskCategory.id,
+        });
+
+        await interaction.editReply({ 
+          content: `✅ **Task-buddy setup complete!**/n/n` +
+            `📢 Announcement channel: <#${selectedChannel.id}>/n` +
+            `👑 Task-mod role: <@&${taskModRole.id}> (assign this to moderators)/n` +
+            `📁 Task category: ${taskCategory.name}/n/n` +
+            `Next steps:/n` +
+            `1. Assign the **task-mod** role to your moderators/n` +
+            `2. Use /createbatch to create your first task batch/n` +
+            `3. Use /announce to post it in the announcement channel`
+        });
+        break;
+      }
+    }
+  } catch (error: any) {
+    console.error(`Select menu error (${action}):`, error);
+    const message = error.message || 'An error occurred';
+    if (interaction.replied || interaction.deferred) {
+      await interaction.editReply({ content: `❌ ${message}` });
+    } else {
+      await interaction.reply({ content: `❌ ${message}`, ephemeral: true });
+    }
+  }
+}
+
 process.on('unhandledRejection', (error) => {
   console.error('Unhandled rejection:', error);
 });
@@ -728,3 +846,4 @@ process.on('uncaughtException', (error) => {
 });
 
 client.login(config.DISCORD_TOKEN);
+

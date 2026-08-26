@@ -13,6 +13,14 @@ export class UserRepository {
       create: { id: discordId, username, discriminator, avatar },
     });
   }
+
+  async ensureExists(discordId: string, username: string, discriminator: string | null, avatar: string | null) {
+    return prisma.user.upsert({
+      where: { id: discordId },
+      update: { username, discriminator, avatar, updatedAt: new Date() },
+      create: { id: discordId, username, discriminator, avatar },
+    });
+  }
 }
 
 export class RedditAccountRepository {
@@ -46,6 +54,38 @@ export class RedditAccountRepository {
   }
 }
 
+export class AuthorizedGuildRepository {
+  async findByGuildId(guildId: string) {
+    return prisma.authorizedGuild.findUnique({ where: { guildId } });
+  }
+
+  async isAuthorized(guildId: string): Promise<boolean> {
+    const guild = await prisma.authorizedGuild.findUnique({ where: { guildId } });
+    return guild?.enabled ?? false;
+  }
+
+  async authorize(guildId: string, authorizedBy: string) {
+    return prisma.authorizedGuild.upsert({
+      where: { guildId },
+      update: { enabled: true, authorizedBy, authorizedAt: new Date() },
+      create: { guildId, enabled: true, authorizedBy },
+    });
+  }
+
+  async deauthorize(guildId: string) {
+    return prisma.authorizedGuild.update({
+      where: { guildId },
+      data: { enabled: false },
+    });
+  }
+
+  async getAllAuthorized() {
+    return prisma.authorizedGuild.findMany({
+      where: { enabled: true },
+    });
+  }
+}
+
 export class TaskBatchRepository {
   async findById(id: string) {
     return prisma.taskBatch.findUnique({
@@ -54,16 +94,17 @@ export class TaskBatchRepository {
     });
   }
 
-  async findActive() {
+  async findActive(guildId: string) {
     return prisma.taskBatch.findFirst({
-      where: { status: BatchStatus.ACTIVE },
+      where: { status: BatchStatus.ACTIVE, guildId },
       include: { tasks: true },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async findAll() {
+  async findAll(guildId: string) {
     return prisma.taskBatch.findMany({
+      where: { guildId },
       include: { tasks: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -77,6 +118,7 @@ export class TaskBatchRepository {
     minKarma: number;
     minAccountAge: number;
     createdBy: string;
+    guildId: string;
     announcementChannelId?: string;
   }) {
     return prisma.taskBatch.create({
@@ -146,6 +188,17 @@ export class TaskRepository {
     return prisma.task.update({
       where: { id },
       data: { status },
+    });
+  }
+
+  async clearAssignment(taskId: string) {
+    return prisma.task.update({
+      where: { id: taskId },
+      data: {
+        assignedTo: null,
+        claimedAt: null,
+        dueAt: null,
+      },
     });
   }
 }

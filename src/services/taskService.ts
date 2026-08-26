@@ -10,6 +10,7 @@ export interface CreateBatchData {
   minKarma: number;
   minAccountAge: number;
   createdBy: string;
+  guildId: string;
   tasks: { comment: string; redditLink: string }[];
 }
 
@@ -30,6 +31,7 @@ export class TaskService {
       minKarma: data.minKarma,
       minAccountAge: data.minAccountAge,
       createdBy: data.createdBy,
+      guildId: data.guildId,
     });
 
     if (data.tasks.length > 0) {
@@ -39,16 +41,16 @@ export class TaskService {
     return batch;
   }
 
-  async getActiveBatch() {
-    return this.batchRepo.findActive();
+  async getActiveBatch(guildId: string) {
+    return this.batchRepo.findActive(guildId);
   }
 
   async getBatchById(id: string) {
     return this.batchRepo.findById(id);
   }
 
-  async getAllBatches() {
-    return this.batchRepo.findAll();
+  async getAllBatches(guildId: string) {
+    return this.batchRepo.findAll(guildId);
   }
 
   async updateBatchAnnouncement(batchId: string, announcementId: string, channelId: string) {
@@ -63,9 +65,11 @@ export class TaskService {
     return this.batchRepo.getAvailableTaskCount(batchId);
   }
 
-  async claimTask(batchId: string, userId: string, redditAccountId: string) {
+  async claimTask(batchId: string, userId: string, redditAccountId: string, guildId: string) {
+    const botConfig = await this.configRepo.get(guildId);
     const config = getConfig();
-    const dueAt = new Date(Date.now() + config.TASK_DEADLINE_MINUTES * 60 * 1000);
+    const deadlineMinutes = botConfig?.taskDeadlineMinutes ?? config.TASK_DEADLINE_MINUTES;
+    const dueAt = new Date(Date.now() + deadlineMinutes * 60 * 1000);
 
     const task = await this.taskRepo.findAvailableByBatch(batchId);
     if (!task) {
@@ -187,7 +191,9 @@ export class TaskService {
       status: TaskStatus.REJECTED,
     });
 
+    // Clear the task assignment so it can be claimed again
     await this.taskRepo.updateStatus(claim.taskId, TaskStatus.AVAILABLE);
+    await this.taskRepo.clearAssignment(claim.taskId);
 
     await this.eventRepo.create(claimId, 'REJECTED', 'Task rejected by user');
 

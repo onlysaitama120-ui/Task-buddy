@@ -25,6 +25,11 @@ export class VerificationService {
       return { verified: false, reason: `Account too new. Required age: ${minAccountAge} days, Current: ${account.accountAge} days` };
     }
 
+    // Update isVerified in database to keep it in sync
+    if (!account.isVerified) {
+      await this.redditAccountRepo.update(discordId, { isVerified: true, verifiedAt: new Date() });
+    }
+
     return { verified: true };
   }
 
@@ -40,9 +45,20 @@ export class VerificationService {
       return { registered: false, verified: false, requiredKarma: minKarma, requiredAccountAge: minAccountAge };
     }
 
+    // Compute verification dynamically
+    const isVerified = account.karma >= minKarma && account.accountAge >= minAccountAge;
+
+    // Update isVerified in database to keep it in sync
+    if (account.isVerified !== isVerified) {
+      await this.redditAccountRepo.update(discordId, { 
+        isVerified, 
+        verifiedAt: isVerified ? new Date() : undefined 
+      });
+    }
+
     return {
       registered: true,
-      verified: account.isVerified,
+      verified: isVerified,
       username: account.username,
       karma: account.karma,
       accountAge: account.accountAge,
