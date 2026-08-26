@@ -11,7 +11,7 @@ import { isTaskMod, requireTaskMod, isOwner, requireOwner, requireAuthorizedGuil
 import { createBatchAnnouncementEmbed, createTaskTicketEmbed, createTaskStatsEmbed, createVerificationStatusEmbed, createBatchListEmbed } from './utils/embeds';
 import { TaskType, BatchStatus, TaskStatus } from '@prisma/client';
 import { AuthorizedGuildRepository } from './database/repositories';
-import { RedditOAuthService, RedditTokens } from './services/redditOAuth';
+import { RedditScraperService } from './services/redditScraper';
 import express from 'express';
 
 const config = loadConfig();
@@ -30,108 +30,6 @@ app.get('/', (req, res) => {
 
 const healthServer = app.listen(PORT, () => {
   console.log(`🏥 Health check server listening on port ${PORT}`);
-});
-
-// OAuth callback endpoint
-app.get('/auth/reddit/callback', async (req, res) => {
-  const { code, state, error } = req.query;
-  
-  if (error) {
-    return res.status(400).send(`Reddit OAuth error: ${error}`);
-  }
-  
-  if (!code || !state) {
-    return res.status(400).send('Missing code or state parameter');
-  }
-  
-  try {
-    const redditOAuth = new RedditOAuthService();
-    const tokens = await redditOAuth.exchangeCodeForTokens(code as string);
-    const userInfo = await redditOAuth.getUserInfo(tokens.access_token);
-    
-    // Store state to get Discord user ID
-    // State format: "discordId:guildId"
-    const [discordId, guildId] = (state as string).split(':');
-    
-    if (!discordId || !guildId) {
-      return res.status(400).send('Invalid state parameter');
-    }
-    
-    // Get guild and member
-    const guild = client.guilds.cache.get(guildId);
-    if (!guild) {
-      return res.status(400).send('Guild not found');
-    }
-    
-    const member = await guild.members.fetch(discordId).catch(() => null);
-    if (!member) {
-      return res.status(400).send('Member not found in guild');
-    }
-    
-    // Verify requirements
-    const config = getConfig();
-    const verification = redditOAuth.verifyUser(
-      userInfo, 
-      config.MIN_REDDIT_KARMA, 
-      config.MIN_REDDIT_ACCOUNT_AGE_DAYS
-    );
-    
-    if (!verification.verified) {
-      return res.send(`
-        <html>
-          <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-            <h2>❌ Verification Failed</h2>
-            <p>${verification.reason}</p>
-            <p>You can close this window.</p>
-          </body>
-        </html>
-      `);
-    }
-    
-    // Register account
-    await accountService.registerAccount(discordId, userInfo.name, userInfo.link_karma + userInfo.comment_karma, 
-      Math.floor((Date.now() / 1000 - userInfo.created_utc) / 86400));
-    
-    // Update Reddit account with OAuth tokens
-    await prisma.redditAccount.update({
-      where: { userId: discordId },
-      data: {
-        username: userInfo.name,
-        redditId: userInfo.id,
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        tokenExpiresAt: new Date(Date.now() + tokens.expires_in * 1000),
-        verifiedAt: new Date(),
-      },
-    });
-    
-    // Assign verified role
-    const verifiedRole = guild.roles.cache.find(r => r.name === 'verified');
-    if (verifiedRole) {
-      await member.roles.add(verifiedRole).catch(() => {});
-    }
-    
-    res.send(`
-      <html>
-        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-          <h2>✅ Verification Successful!</h2>
-          <p>Welcome, u/${userInfo.name}!</p>
-          <p>Your account has been verified and the verified role has been assigned.</p>
-          <p>You can close this window and return to Discord.</p>
-        </body>
-      </html>
-    `);
-  } catch (err) {
-    console.error('OAuth callback error:', err);
-    res.status(500).send(`
-      <html>
-        <body style="font-family: sans-serif; text-align: center; padding: 50px;">
-          <h2>❌ Error</h2>
-          <p>An error occurred during verification. Please try again.</p>
-        </body>
-      </html>
-    `);
-  }
 });
 
 const client = new Client({
@@ -366,21 +264,34 @@ function parseAccountAge(input: string): number {
         const usernameMatch = redditProfile.match(new RegExp('reddit////.com/u/([^/?]+)', 'i'));
         const username = usernameMatch ? usernameMatch[1] : stripRedditPrefix(redditProfile);
         
-        const state = `${user.id}:${interaction.guildId!}`;
-        const redditOAuth = new RedditOAuthService();
-        const authUrl = redditOAuth.getAuthUrl(state);
+        await interaction.deferReply({ ephemeral: true });
         
-        const button = new ButtonBuilder()
-          .setLabel('🔗 Connect with Reddit')
-          .setStyle(ButtonStyle.Link)
-          .setURL(authUrl);
+        const redditScraper = new RedditScraperService();
+        const userInfo = await redditScraper.fetchUserInfo(username);
         
-        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
+        if (!userInfo) {
+          await interaction.editReply({ content: '❌ Could not fetch Reddit profile. Make sure the profile is public and the username is correct.' });
+          return;
+        }
         
-        await interaction.reply({
-          content: `Click the button below to authorize Task-buddy to verify your Reddit account (u/${username}):`,
-          components: [row],
-          ephemeral: true,
+        const config = getConfig();
+        const verification = redditScraper.verifyUser(userInfo, config.MIN_REDDIT_KARMA, config.MIN_REDDIT_ACCOUNT_AGE_DAYS);
+        
+        if (!verification.verified) {
+          await interaction.editReply({ content: `❌ Verification failed: ${verification.reason}` });
+          return;
+        }
+        
+        const accountAgeDays = Math.floor((Date.now() / 1000 - userInfo.created_utc) / 86400);
+        const totalKarma = userInfo.link_karma + userInfo.comment_karma;
+        
+        await accountService.registerAccount(user.id, userInfo.name, totalKarma, accountAgeDays);
+        
+        const guildId = interaction.guildId!;
+        const status = await verificationService.getVerificationStatus(user.id, guildId);
+        
+        await interaction.editReply({ 
+          content: `✅ Verified! u/${userInfo.name} | Karma: ${totalKarma} | Account age: ${accountAgeDays} days` 
         });
         break;
       }
