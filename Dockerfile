@@ -3,14 +3,13 @@ FROM node:18-alpine
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 
 COPY src ./src
 COPY tsconfig.json ./
-RUN npm run build
 
-COPY src/database/prisma ./src/database/prisma
 RUN npx prisma generate --schema=src/database/prisma/schema.prisma
+RUN npm run build
 
 EXPOSE 3000
 

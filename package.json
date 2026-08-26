@@ -14,8 +14,7 @@
     "prisma:push": "prisma db push --schema=src/database/prisma/schema.prisma",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write src",
-    "postinstall": "prisma generate --schema=src/database/prisma/schema.prisma"
-  },
+    },
   "keywords": [
     "discord",
     "bot",
