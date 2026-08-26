@@ -11,9 +11,9 @@ const envSchema = z.object({
   MIN_REDDIT_KARMA: z.coerce.number().int().positive().default(100),
   MIN_REDDIT_ACCOUNT_AGE_DAYS: z.coerce.number().int().positive().default(30),
   TASK_DEADLINE_MINUTES: z.coerce.number().int().positive().default(30),
-  REDDIT_CLIENT_ID: z.string().min(1, 'REDDIT_CLIENT_ID is required'),
-  REDDIT_CLIENT_SECRET: z.string().min(1, 'REDDIT_CLIENT_SECRET is required'),
-  REDDIT_REDIRECT_URI: z.string().min(1, 'REDDIT_REDIRECT_URI is required'),
+  REDDIT_CLIENT_ID: z.string().optional(),
+  REDDIT_CLIENT_SECRET: z.string().optional(),
+  REDDIT_REDIRECT_URI: z.string().optional(),
 });
 
 export type Config = z.infer<typeof envSchema>;
