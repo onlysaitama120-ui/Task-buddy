@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs-18", "postgresql"]
+
+[phases.install]
+cmds = ["npm ci --only=production"]
+
+[phases.build]
+cmds = ["npx prisma generate --schema=src/database/prisma/schema.prisma && tsc"]
+
+[start]
+cmd = "node dist/index.js"
