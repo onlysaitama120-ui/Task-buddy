@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TaskType {
+  COMMENT
+  POST
+  UPVOTE
+  CUSTOM
+}
+
+enum TaskStatus {
+  AVAILABLE
+  CLAIMED
+  IN_PROGRESS
+  PROOF_SUBMITTED
+  COMPLETED
+  REJECTED
+  TIMED_OUT
+}
+
+enum BatchStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id            String           @id @map("discord_id")
+  username      String
+  discriminator String?
+  avatar        String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  redditAccount RedditAccount?
+  taskClaims    TaskClaim[]
+  statistics    UserStatistics?
+
+  @@map("users")
+}
+
+model RedditAccount {
+  id           String   @id @default(cuid())
+  userId       String   @unique @map("user_id")
+  username     String
+  karma        Int      @default(0)
+  accountAge   Int      @default(0) // in days
+  isVerified   Boolean  @default(false)
+  verifiedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskClaims   TaskClaim[]
+
+  @@map("reddit_accounts")
+}
+
+model TaskBatch {
+  id              String       @id @default(cuid())
+  name            String
+  type            TaskType
+  taskCount       Int
+  payPerTask      Decimal      @db.Decimal(10, 2)
+  status          BatchStatus  @default(ACTIVE)
+  announcementId  String?      @unique @map("announcement_id")
+  announcementChannelId String? @map("announcement_channel_id")
+  minKarma        Int          @default(100)
+  minAccountAge   Int          @default(30) // in days
+  createdBy       String       @map("created_by")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  tasks           Task[]
+  claims          TaskClaim[]
+
+  @@map("task_batches")
+}
+
+model Task {
+  id          String      @id @default(cuid())
+  batchId     String      @map("batch_id")
+  comment     String
+  redditLink  String      @map("reddit_link")
+  status      TaskStatus  @default(AVAILABLE)
+  assignedTo  String?     @unique @map("assigned_to")
+  claimedAt   DateTime?   @map("claimed_at")
+  dueAt       DateTime?   @map("due_at")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  batch       TaskBatch   @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  claim       TaskClaim?
+
+  @@index([batchId, status])
+  @@map("tasks")
+}
+
+model TaskClaim {
+  id            String      @id @default(cuid())
+  userId        String      @map("user_id")
+  redditAccountId String    @map("reddit_account_id")
+  taskId        String      @unique @map("task_id")
+  batchId       String      @map("batch_id")
+  status        TaskStatus  @default(CLAIMED)
+  payAmount     Decimal     @db.Decimal(10, 2)
+  proofUrl      String?     @map("proof_url")
+  submittedAt   DateTime?   @map("submitted_at")
+  reviewedAt    DateTime?   @map("reviewed_at")
+  reviewedBy    String?     @map("reviewed_by")
+  completedAt   DateTime?   @map("completed_at")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redditAccount RedditAccount @relation(fields: [redditAccountId], references: [id], onDelete: Cascade)
+  task          Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  batch         TaskBatch   @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  ticket        Ticket?
+  events        TaskEvent[]
+
+  @@index([userId, status])
+  @@index([batchId, status])
+  @@map("task_claims")
+}
+
+model Ticket {
+  id          String   @id @default(cuid())
+  claimId     String   @unique @map("claim_id")
+  channelId   String   @unique @map("channel_id")
+  isClosed    Boolean  @default(false)
+  closedAt    DateTime? @map("closed_at")
+  closedBy    String?  @map("closed_by")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  claim       TaskClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@map("tickets")
+}
+
+model TaskEvent {
+  id          String   @id @default(cuid())
+  claimId     String   @map("claim_id")
+  type        String
+  description String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  claim       TaskClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([claimId, createdAt])
+  @@map("task_events")
+}
+
+model UserStatistics {
+  id            String   @id @default(cuid())
+  userId        String   @unique @map("user_id")
+  completed     Int      @default(0)
+  rejected      Int      @default(0)
+  timedOut      Int      @default(0)
+  totalEarned   Decimal  @default(0) @db.Decimal(10, 2)
+  lastUpdated   DateTime @default(now()) @map("last_updated")
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_statistics")
+}
+
+model BotConfig {
+  id              String   @id @default(cuid())
+  guildId         String   @unique @map("guild_id")
+  announcementChannelId String? @map("announcement_channel_id")
+  taskModRoleId   String?  @map("task_mod_role_id")
+  taskCategoryId  String?  @map("task_category_id")
+  minKarma        Int      @default(100) @map("min_karma")
+  minAccountAge   Int      @default(30) @map("min_account_age")
+  taskDeadlineMinutes Int  @default(30) @map("task_deadline_minutes")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("bot_config")
+}
