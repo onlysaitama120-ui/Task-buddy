@@ -14,7 +14,7 @@ export class RedditScraperService {
   private userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   extractUsername(profileUrl: string): string | null {
-    const match = profileUrl.match(new RegExp('reddit//.com/(?:u|user)/([^/?]+)', 'i'));
+    const match = profileUrl.match(new RegExp('(?:www//.)?reddit//.com/(?:u|user)/([^/?]+)', 'i'));
     return match ? match[1] : null;
   }
 

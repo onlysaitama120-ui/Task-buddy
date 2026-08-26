@@ -276,7 +276,7 @@ function parseAccountAge(input: string): number {
         if (redditProfile) {
           await interaction.deferReply({ ephemeral: true });
           
-          const usernameMatch = redditProfile.match(new RegExp('reddit//.com/(?:u|user)/([^/?]+)', 'i'));
+          const usernameMatch = redditProfile.match(new RegExp('(?:www//.)?reddit//.com/(?:u|user)/([^/?]+)', 'i'));
           const extractedUsername = usernameMatch ? usernameMatch[1] : stripRedditPrefix(redditProfile);
           
           const redditScraper = new RedditScraperService();
