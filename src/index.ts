@@ -74,8 +74,11 @@ client.once(Events.ClientReady, async (readyClient) => {
 
   try {
     const rest = new REST({ version: '10' }).setToken(config.DISCORD_TOKEN);
-    await rest.put(Routes.applicationCommands(config.DISCORD_CLIENT_ID), {
-      body: [
+    
+    // Register commands to ALL guilds instantly (for testing)
+    for (const guild of readyClient.guilds.cache.values()) {
+      await rest.put(Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, guild.id), {
+        body: [
         {
           name: 'register',
           description: 'Register your Reddit account',
@@ -178,7 +181,9 @@ client.once(Events.ClientReady, async (readyClient) => {
         },
       ],
     });
-    console.log('✅ Slash commands registered');
+    console.log(`✅ Slash commands registered to guild ${guild.id}`);
+  }
+  console.log('✅ Slash commands registered to all guilds');
   } catch (error) {
     console.error('❌ Failed to register commands:', error);
   }
