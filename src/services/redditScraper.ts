@@ -19,20 +19,26 @@ export class RedditScraperService {
   }
 
   async fetchUserInfo(username: string): Promise<RedditUserInfo | null> {
-    // Try Reddit's public JSON API first (most reliable)
+    console.log(`[RedditScraper] Fetching info for u/${username}`);
+    
+    // Method 1: Reddit's public JSON API (most reliable)
     try {
-      const url = `${this.baseUrl}/user/${username}/about.json`;
+      console.log(`[RedditScraper] Trying Reddit JSON API for u/${username}`);
+      const url = `https://www.reddit.com/user/${username}/about.json`;
       const response = await fetch(url, {
         headers: {
-          'User-Agent': this.userAgent,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'application/json',
         },
         redirect: 'follow',
       });
 
+      console.log(`[RedditScraper] Reddit API response: ${response.status} ${response.statusText}`);
+      
       if (response.ok) {
         const data: any = await response.json();
         if (data.data) {
+          console.log(`[RedditScraper] Successfully fetched via Reddit JSON API`);
           return {
             name: data.data.name,
             link_karma: data.data.link_karma || 0,
@@ -41,6 +47,8 @@ export class RedditScraperService {
             id: data.data.id || username,
           };
         }
+      } else {
+        console.log(`[RedditScraper] Reddit API failed: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
       console.error('Reddit JSON API error:', error);
@@ -48,18 +56,22 @@ export class RedditScraperService {
 
     // Fallback: Try old.reddit.com JSON endpoint
     try {
+      console.log(`[RedditScraper] Trying old.reddit.com JSON API for u/${username}`);
       const url = `https://old.reddit.com/user/${username}/about.json`;
       const response = await fetch(url, {
         headers: {
-          'User-Agent': this.userAgent,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'application/json',
         },
         redirect: 'follow',
       });
 
+      console.log(`[RedditScraper] Old Reddit API response: ${response.status} ${response.statusText}`);
+      
       if (response.ok) {
         const data: any = await response.json();
         if (data.data) {
+          console.log(`[RedditScraper] Successfully fetched via old.reddit.com JSON API`);
           return {
             name: data.data.name,
             link_karma: data.data.link_karma || 0,
@@ -68,6 +80,8 @@ export class RedditScraperService {
             id: data.data.id || username,
           };
         }
+      } else {
+        console.log(`[RedditScraper] Old Reddit API failed: ${response.status} ${response.statusText}`);
       }
     } catch (error) {
       console.error('Old Reddit JSON API error:', error);
@@ -75,10 +89,11 @@ export class RedditScraperService {
 
     // Fallback: Scrape old.reddit.com HTML
     try {
+      console.log(`[RedditScraper] Trying HTML scrape for u/${username}`);
       const url = `https://old.reddit.com/user/${username}`;
       const response = await fetch(url, {
         headers: {
-          'User-Agent': this.userAgent,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.5',
           'Accept-Encoding': 'gzip, deflate, br',
@@ -89,9 +104,15 @@ export class RedditScraperService {
         redirect: 'follow',
       });
 
+      console.log(`[RedditScraper] HTML scrape response: ${response.status} ${response.statusText}`);
+      
       if (!response.ok) {
         if (response.status === 404) return null;
-        throw new Error(`Failed to fetch: ${response.status}`);
+        if (response.status === 403) {
+          console.log('[RedditScraper] Got 403 - likely blocked or private profile');
+          throw new Error('Profile may be private or Reddit is blocking requests');
+        }
+        throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
       }
 
       const html = await response.text();
@@ -100,6 +121,7 @@ export class RedditScraperService {
       console.error('HTML scraper error:', error);
     }
 
+    console.log(`[RedditScraper] All methods failed for u/${username}`);
     return null;
   }
 
