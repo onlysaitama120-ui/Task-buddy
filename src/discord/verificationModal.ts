@@ -10,7 +10,7 @@ import {
 import { AccountService } from '../services/accountService';
 
 /**
- * Handles the "Verify Reddit" button → modal workflow.
+ * Handles the “Verify Reddit” button → modal workflow.
  *   - Button customId: "verify_reddit"
  *   - Modal customId: "verify_reddit_modal"
  *   - User provides a full Reddit profile URL (e.g. https://www.reddit.com/user/YourName).
@@ -48,8 +48,9 @@ export function registerVerificationInteraction(client: Client) {
     if (interaction.customId !== 'verify_reddit_modal') return;
 
     const redditUrl = interaction.fields.getTextInputValue('reddit_url');
-    // Correct regex – extracts the username from a Reddit profile URL
-    const match = redditUrl.match(/reddit/.com//user//([^//]+)/i);
+
+    // **Correct regex – extracts the username from a Reddit profile URL**
+    const match = redditUrl.match(/reddit\.com\/user\/([^\/]+)/i);
     const username = match ? match[1] : null;
 
     if (!username) {
@@ -60,7 +61,7 @@ export function registerVerificationInteraction(client: Client) {
       return;
     }
 
-    // Placeholder values – replace with real Reddit API calls later
+    // Placeholder values – replace with real Reddit API calls later if desired
     const placeholderKarma = 0;
     const placeholderAge = 0;
 
