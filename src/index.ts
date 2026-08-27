@@ -1,28 +1,29 @@
-﻿// index.ts – Minimal bot entry point for Render deployment
-// This stub starts the Discord client, registers the verification modal, and runs the timeout worker.
-// All other command handling can be added later via separate modules.
-
-import { Client, IntentsBitField } from 'discord.js';
+﻿import { Client, IntentsBitField } from 'discord.js';
 import { loadConfig } from './config';
 import { registerVerificationInteraction } from './discord/verificationInteraction';
 import { startTimeoutWorker } from './cron/timeoutCron';
-import { PrismaClient } from '@prisma/client';
+import { createServer } from 'http';
 
-// Load env config (will exit if required vars missing)
 const config = loadConfig();
 
-// Initialise Discord client (only the intents we need)
+// ---- Tiny HTTP server for Render port detection ----
+const PORT = parseInt(process.env.PORT || '3000', 10);
+const server = createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Task-buddy bot is running!');
+});
+server.listen(PORT, () => {
+  console.log(`🌐 HTTP server listening on port ${PORT} (for Render)`);
+}
+
+// ---- Discord bot ----
 const client = new Client({
   intents: [IntentsBitField.Flags.Guilds, IntentsBitField.Flags.GuildMessages],
 });
 
 client.once('ready', async () => {
   console.log(`🤖 Bot logged in as ${client.user?.tag}`);
-
-  // Register the Verify‑Reddit button handler (shows modal)
   registerVerificationInteraction(client);
-
-  // Start the background timeout worker (runs every minute)
   startTimeoutWorker();
 });
 
@@ -34,6 +35,9 @@ client.login(config.DISCORD_TOKEN).catch((err) => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received – shutting down');
+  server.close(() => {
+    console.log('HTTP server closed');
+    process.exit(0);
+  });
   await client.destroy();
-  process.exit(0);
-});
+}
