@@ -893,7 +893,7 @@ async function handleButton(interaction: any) {
           return;
         }
         const modal = {
-          customId: 'create_batch_modal',
+          customId: 'dash_create_batch_modal',
           title: 'Create Task Batch',
           components: [
             {
@@ -905,6 +905,12 @@ async function handleButton(interaction: any) {
                 { type: 4, customId: 'pay_per_task', label: 'Pay per Task (USD)', style: 1, required: true, maxLength: 10 },
                 { type: 4, customId: 'min_karma', label: 'Min Karma (optional)', style: 1, required: false, maxLength: 10 },
                 { type: 4, customId: 'min_account_age', label: 'Min Account Age in days (optional)', style: 1, required: false, maxLength: 10 },
+              ],
+            },
+            {
+              type: 1,
+              components: [
+                { type: 4, customId: 'tasks_json', label: 'Tasks (JSON array)', style: 2, required: true, maxLength: 4000, placeholder: '[{"comment":"...","reddit_link":"..."},...]' },
               ],
             },
           ],
@@ -966,8 +972,17 @@ async function handleButton(interaction: any) {
           await interaction.reply({ content: '❌ Administrator only.', ephemeral: true });
           return;
         }
-        const count = await prisma.redditAccount.count();
-        await interaction.reply({ content: `👥 Total registered accounts: ${count}`, ephemeral: true });
+        const accounts = await prisma.redditAccount.findMany({
+          include: { user: true },
+          orderBy: { createdAt: 'desc' },
+        });
+        const count = accounts.length;
+        if (count === 0) {
+          await interaction.reply({ content: '👥 No registered accounts yet.', ephemeral: true });
+          return;
+        }
+        const accountList = accounts.map(a => `• **u/${a.username}** — <@${a.userId}> (Karma: ${a.karma}, Age: ${a.accountAge}d)`).join('/n');
+        await interaction.reply({ content: `👥 **Total registered accounts: ${count}**/n/n${accountList}`, ephemeral: true });
         break;
       }
 
@@ -982,12 +997,13 @@ async function handleButton(interaction: any) {
         const config = getConfig();
         await interaction.reply({
           content: `⚙️ **Current Configuration**
-/n/n**Min Karma:** ${botConfig?.minKarma ?? config.MIN_REDDIT_KARMA}
-/n**Min Account Age:** ${botConfig?.minAccountAge ?? config.MIN_REDDIT_ACCOUNT_AGE_DAYS} days
-/n**Task Deadline:** ${botConfig?.taskDeadlineMinutes ?? config.TASK_DEADLINE_MINUTES} minutes
-/n**Announcement Channel:** ${botConfig?.announcementChannelId ? `<#${botConfig.announcementChannelId}>` : 'Not set'}
-/n**Task Mod Role:** ${botConfig?.taskModRoleId ? `<@&${botConfig.taskModRoleId}>` : 'Not set'}
-/n**Task Category:** ${botConfig?.taskCategoryId ? `<#${botConfig.taskCategoryId}>` : 'Not set'}`, ephemeral: true });
+
+**Min Karma:** ${botConfig?.minKarma ?? config.MIN_REDDIT_KARMA}
+**Min Account Age:** ${botConfig?.minAccountAge ?? config.MIN_REDDIT_ACCOUNT_AGE_DAYS} days
+**Task Deadline:** ${botConfig?.taskDeadlineMinutes ?? config.TASK_DEADLINE_MINUTES} minutes
+**Announcement Channel:** ${botConfig?.announcementChannelId ? `<#${botConfig.announcementChannelId}>` : 'Not set'}
+**Task Mod Role:** ${botConfig?.taskModRoleId ? `<@&${botConfig.taskModRoleId}>` : 'Not set'}
+**Task Category:** ${botConfig?.taskCategoryId ? `<#${botConfig.taskCategoryId}>` : 'Not set'}`, ephemeral: true });
         break;
       }
     }
@@ -1007,6 +1023,53 @@ async function handleModal(interaction: any) {
 
   try {
     switch (action) {
+      case 'dash_create_batch_modal': {
+        const name = interaction.fields.getTextInputValue('batch_name');
+        const type = interaction.fields.getTextInputValue('batch_type') as TaskType;
+        const taskCount = parseInt(interaction.fields.getTextInputValue('task_count'));
+        const payPerTask = parseFloat(interaction.fields.getTextInputValue('pay_per_task'));
+        const minKarmaStr = interaction.fields.getTextInputValue('min_karma');
+        const minAccountAgeStr = interaction.fields.getTextInputValue('min_account_age');
+        const minKarma = minKarmaStr ? parseInt(minKarmaStr) : config.MIN_REDDIT_KARMA;
+        const minAccountAge = minAccountAgeStr ? parseAccountAge(minAccountAgeStr) : config.MIN_REDDIT_ACCOUNT_AGE_DAYS;
+
+        const tasksJson = interaction.fields.getTextInputValue('tasks_json');
+        let tasks: { comment: string; redditLink: string }[];
+        try {
+          tasks = JSON.parse(tasksJson);
+        } catch {
+          await interaction.reply({ content: '❌ Invalid JSON format', ephemeral: true });
+          return;
+        }
+
+        if (!Array.isArray(tasks) || tasks.length !== taskCount) {
+          await interaction.reply({ content: `❌ Must provide exactly ${taskCount} tasks`, ephemeral: true });
+          return;
+        }
+
+        for (const task of tasks) {
+          if (!task.comment || !task.redditLink) {
+            await interaction.reply({ content: '❌ Each task must have comment and reddit_link', ephemeral: true });
+            return;
+          }
+        }
+
+        const batch = await taskService.createBatch({
+          name,
+          type: type as TaskType,
+          taskCount,
+          payPerTask,
+          minKarma,
+          minAccountAge,
+          createdBy: interaction.user.id,
+          guildId: interaction.guildId!,
+          tasks,
+        });
+
+        await interaction.reply({ content: `✅ Batch created: ${batch.name} (${batch.id}) with ${tasks.length} tasks`, ephemeral: true });
+        break;
+      }
+
       case 'create_batch_modal': {
         const [name, type, taskCountStr, payPerTaskStr, minKarmaStr, minAccountAgeStr] = params;
         const taskCount = parseInt(taskCountStr);
