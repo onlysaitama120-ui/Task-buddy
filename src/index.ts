@@ -69,6 +69,29 @@ function stripRedditPrefix(input: string): string {
   return input;
 }
 
+function extractRedditUsername(input: string): string {
+  // Handle full URLs: https://www.reddit.com/user/username/ or /u/username
+  const lower = input.trim().toLowerCase();
+  
+  // Try to find /user/ or /u/ in the URL
+  const userIdx = lower.indexOf('/user/');
+  if (userIdx !== -1) {
+    const after = input.slice(userIdx + 6);
+    const end = after.search(/[/?]/);
+    return end === -1 ? after : after.slice(0, end);
+  }
+  
+  const uIdx = lower.indexOf('/u/');
+  if (uIdx !== -1) {
+    const after = input.slice(uIdx + 3);
+    const end = after.search(/[/?]/);
+    return end === -1 ? after : after.slice(0, end);
+  }
+  
+  // Might be a bare username like "QueasyMarionberry843" or "u/QueasyMarionberry843"
+  return stripRedditPrefix(input.trim());
+}
+
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`✅ Logged in as ${readyClient.user.tag}`);
   console.log(`🤖 Task-buddy is ready!`);
@@ -276,8 +299,8 @@ function parseAccountAge(input: string): number {
         if (redditProfile) {
           await interaction.deferReply({ ephemeral: true });
           
-          const usernameMatch = redditProfile.match(new RegExp('(?:www//.)?reddit//.com/(?:u|user)/([^/?]+)', 'i'));
-          const extractedUsername = usernameMatch ? usernameMatch[1] : stripRedditPrefix(redditProfile);
+          const extractedUsername = extractRedditUsername(redditProfile);
+          console.log(`[Register] Input: ${redditProfile}, Extracted: ${extractedUsername}`);
           
           const redditScraper = new RedditScraperService();
           const userInfo = await redditScraper.fetchUserInfo(extractedUsername);

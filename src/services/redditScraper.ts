@@ -14,8 +14,20 @@ export class RedditScraperService {
   private userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   extractUsername(profileUrl: string): string | null {
-    const match = profileUrl.match(new RegExp('(?:www//.)?reddit//.com/(?:u|user)/([^/?]+)', 'i'));
-    return match ? match[1] : null;
+    const lower = profileUrl.trim().toLowerCase();
+    const userIdx = lower.indexOf('/user/');
+    if (userIdx !== -1) {
+      const after = profileUrl.slice(userIdx + 6);
+      const end = after.search(/[/?]/);
+      return end === -1 ? after : after.slice(0, end);
+    }
+    const uIdx = lower.indexOf('/u/');
+    if (uIdx !== -1) {
+      const after = profileUrl.slice(uIdx + 3);
+      const end = after.search(/[/?]/);
+      return end === -1 ? after : after.slice(0, end);
+    }
+    return profileUrl.trim();
   }
 
   async fetchUserInfo(username: string): Promise<RedditUserInfo | null> {
