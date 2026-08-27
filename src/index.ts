@@ -234,7 +234,6 @@ client.once(Events.ClientReady, async (readyClient) => {
             name: 'announcecustom',
             description: 'Post a custom announcement message (task-mod only)',
             options: [
-              { name: 'message', description: 'The message to post', type: 3, required: true },
               { name: 'channel', description: 'Channel to post in (defaults to announcement channel)', type: 7, required: false },
             ],
           },
@@ -577,29 +576,23 @@ async function handleSlashCommand(interaction: any) {
         const guildId = interaction.guildId!;
         await requireAuthorizedGuild(guildId);
 
-        const message = options.getString('message');
         const channelOption = options.getChannel('channel');
+        const channelId = channelOption ? channelOption.id : 'default';
 
-        // Determine target channel: specified channel or configured announcement channel
-        let targetChannel;
-        if (channelOption && channelOption.isTextBased()) {
-          targetChannel = channelOption;
-        } else {
-          const botConfig = await taskService.configRepo.get(guildId);
-          const announcementChannelId = botConfig?.announcementChannelId;
-          if (!announcementChannelId) {
-            await interaction.reply({ content: '❌ Announcement channel not configured. Use /config or /setup, or specify a channel.', ephemeral: true });
-            return;
-          }
-          targetChannel = guild.channels.cache.get(announcementChannelId);
-          if (!targetChannel || !targetChannel.isTextBased()) {
-            await interaction.reply({ content: '❌ Announcement channel not found or invalid.', ephemeral: true });
-            return;
-          }
-        }
+        const modal = {
+          customId: `announce_custom_modal:${channelId}`,
+          title: '📢 Custom Announcement',
+          components: [
+            {
+              type: 1,
+              components: [
+                { type: 4, customId: 'announce_message', label: 'Announcement message', style: 2, required: true, maxLength: 2000 },
+              ],
+            },
+          ],
+        };
 
-        await targetChannel.send(message);
-        await interaction.reply({ content: `✅ Announcement posted in <#${targetChannel.id}>`, ephemeral: true });
+        await interaction.showModal(modal);
         break;
       }
 
@@ -1107,6 +1100,37 @@ async function handleModal(interaction: any) {
         });
 
         await interaction.reply({ content: `✅ Batch created: ${batch.name} (${batch.id}) with ${tasks.length} tasks`, ephemeral: true });
+        break;
+      }
+
+      case 'announce_custom_modal': {
+        const channelId = params[0];
+        const message = interaction.fields.getTextInputValue('announce_message');
+
+        const guildId = interaction.guildId!;
+        const guild = interaction.guild!;
+
+        // Determine target channel: specified channel or configured announcement channel
+        let targetChannel;
+        if (channelId && channelId !== 'default') {
+          targetChannel = guild.channels.cache.get(channelId);
+        } else {
+          const botConfig = await taskService.configRepo.get(guildId);
+          const announcementChannelId = botConfig?.announcementChannelId;
+          if (!announcementChannelId) {
+            await interaction.reply({ content: '❌ Announcement channel not configured. Use /config or /setup.', ephemeral: true });
+            return;
+          }
+          targetChannel = guild.channels.cache.get(announcementChannelId);
+        }
+
+        if (!targetChannel || !targetChannel.isTextBased()) {
+          await interaction.reply({ content: '❌ Target channel not found or invalid.', ephemeral: true });
+          return;
+        }
+
+        await targetChannel.send(message);
+        await interaction.reply({ content: `✅ Announcement posted in <#${targetChannel.id}>`, ephemeral: true });
         break;
       }
 
