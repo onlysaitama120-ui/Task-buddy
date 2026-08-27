@@ -14,7 +14,7 @@ const server = createServer((req, res) => {
 });
 server.listen(PORT, () => {
   console.log(`🌐 HTTP server listening on port ${PORT} (for Render)`);
-}
+});
 
 // ---- Discord bot ----
 const client = new Client({
@@ -40,4 +40,4 @@ process.on('SIGTERM', async () => {
     process.exit(0);
   });
   await client.destroy();
-}
+});
