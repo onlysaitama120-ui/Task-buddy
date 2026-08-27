@@ -936,13 +936,6 @@ async function handleButton(interaction: any) {
                 { type: 4, customId: 'batch_type', label: 'Task Type (COMMENT/POST/UPVOTE/CUSTOM)', style: 1, required: true, maxLength: 20 },
                 { type: 4, customId: 'task_count', label: 'Number of Tasks', style: 1, required: true, maxLength: 5 },
                 { type: 4, customId: 'pay_per_task', label: 'Pay per Task (USD)', style: 1, required: true, maxLength: 10 },
-                { type: 4, customId: 'min_karma', label: 'Min Karma (optional)', style: 1, required: false, maxLength: 10 },
-              ],
-            },
-            {
-              type: 1,
-              components: [
-                { type: 4, customId: 'min_account_age', label: 'Min Account Age in days (optional)', style: 1, required: false, maxLength: 10 },
               ],
             },
             {
@@ -1066,10 +1059,6 @@ async function handleModal(interaction: any) {
         const type = interaction.fields.getTextInputValue('batch_type') as TaskType;
         const taskCount = parseInt(interaction.fields.getTextInputValue('task_count'));
         const payPerTask = parseFloat(interaction.fields.getTextInputValue('pay_per_task'));
-        const minKarmaStr = interaction.fields.getTextInputValue('min_karma');
-        const minAccountAgeStr = interaction.fields.getTextInputValue('min_account_age');
-        const minKarma = minKarmaStr ? parseInt(minKarmaStr) : config.MIN_REDDIT_KARMA;
-        const minAccountAge = minAccountAgeStr ? parseAccountAge(minAccountAgeStr) : config.MIN_REDDIT_ACCOUNT_AGE_DAYS;
 
         const tasksJson = interaction.fields.getTextInputValue('tasks_json');
         let tasks: { comment: string; redditLink: string }[];
@@ -1097,8 +1086,8 @@ async function handleModal(interaction: any) {
           type: type as TaskType,
           taskCount,
           payPerTask,
-          minKarma,
-          minAccountAge,
+          minKarma: config.MIN_REDDIT_KARMA,
+          minAccountAge: config.MIN_REDDIT_ACCOUNT_AGE_DAYS,
           createdBy: interaction.user.id,
           guildId: interaction.guildId!,
           tasks,
