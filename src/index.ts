@@ -933,8 +933,23 @@ async function handleButton(interaction: any) {
               type: 1,
               components: [
                 { type: 4, customId: 'batch_name', label: 'Batch Name', style: 1, required: true, maxLength: 100 },
+              ],
+            },
+            {
+              type: 1,
+              components: [
                 { type: 4, customId: 'batch_type', label: 'Task Type (COMMENT/POST/UPVOTE/CUSTOM)', style: 1, required: true, maxLength: 20 },
+              ],
+            },
+            {
+              type: 1,
+              components: [
                 { type: 4, customId: 'task_count', label: 'Number of Tasks', style: 1, required: true, maxLength: 5 },
+              ],
+            },
+            {
+              type: 1,
+              components: [
                 { type: 4, customId: 'pay_per_task', label: 'Pay per Task (USD)', style: 1, required: true, maxLength: 10 },
               ],
             },
