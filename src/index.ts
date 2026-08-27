@@ -921,13 +921,14 @@ async function handleButton(interaction: any) {
 
       case 'dash_createbatch': {
         const member = interaction.member;
-        if (!member.roles.cache.some((r: any) => r.name === 'task-mod')) {
-          await interaction.reply({ content: '❌ Only task-mods can create batches.', ephemeral: true });
-          return;
-        }
+        requireTaskMod(member);
+
+        const guildId = interaction.guildId!;
+        await requireAuthorizedGuild(guildId);
+
         const modal = {
-          customId: 'dash_create_batch_modal',
-          title: 'Create Task Batch',
+          customId: 'create_batch_step1',
+          title: 'Create Task Batch (Step 1/2)',
           components: [
             {
               type: 1,
@@ -938,25 +939,19 @@ async function handleButton(interaction: any) {
             {
               type: 1,
               components: [
-                { type: 4, customId: 'batch_type', label: 'Task Type (COMMENT/POST/UPVOTE/CUSTOM)', style: 1, required: true, maxLength: 20 },
+                { type: 4, customId: 'batch_type', label: 'Task Type', style: 1, required: true, maxLength: 20 },
               ],
             },
             {
               type: 1,
               components: [
-                { type: 4, customId: 'task_count', label: 'Number of Tasks', style: 1, required: true, maxLength: 5 },
+                { type: 4, customId: 'task_count', label: 'Number of Tasks', style: 1, required: true, maxLength: 2, placeholder: '1-20' },
               ],
             },
             {
               type: 1,
               components: [
-                { type: 4, customId: 'pay_per_task', label: 'Pay per Task (USD)', style: 1, required: true, maxLength: 10 },
-              ],
-            },
-            {
-              type: 1,
-              components: [
-                { type: 4, customId: 'tasks_json', label: 'Tasks (JSON array)', style: 2, required: true, maxLength: 4000, placeholder: '[{"comment":"...","reddit_link":"..."},...]' },
+                { type: 4, customId: 'pay_per_task', label: 'Pay per Task (USD)', style: 1, required: true, maxLength: 10, placeholder: 'e.g. 0.50' },
               ],
             },
           ],
@@ -1069,46 +1064,142 @@ async function handleModal(interaction: any) {
 
   try {
     switch (action) {
-      case 'dash_create_batch_modal': {
+      case 'create_batch_step1': {
         const name = interaction.fields.getTextInputValue('batch_name');
         const type = interaction.fields.getTextInputValue('batch_type') as TaskType;
         const taskCount = parseInt(interaction.fields.getTextInputValue('task_count'));
         const payPerTask = parseFloat(interaction.fields.getTextInputValue('pay_per_task'));
 
-        const tasksJson = interaction.fields.getTextInputValue('tasks_json');
-        let tasks: { comment: string; redditLink: string }[];
+        if (isNaN(taskCount) || taskCount < 1 || taskCount > 20) {
+          await interaction.reply({ content: '❌ Task count must be between 1 and 20', ephemeral: true });
+          return;
+        }
+
+        // Show first task modal
+        const modal = {
+          customId: `create_batch_task:1:${name}:${type}:${taskCount}:${payPerTask}`,
+          title: `Create Task 1 of 1`,
+          components: [
+            {
+              type: 1,
+              components: [
+                { type: 4, customId: 'task_comment', label: 'Comment', style: 2, required: true, maxLength: 1000, placeholder: 'Enter the comment to post' },
+              ],
+            },
+            {
+              type: 1,
+              components: [
+                { type: 4, customId: 'task_link', label: 'Reddit Link', style: 1, required: true, maxLength: 500, placeholder: 'https://reddit.com/r/.../comments/...' },
+              ],
+            },
+          ],
+        };
+
+        await interaction.showModal(modal);
+        break;
+      }
+
+      case 'create_batch_task': {
+        // params: [taskIndex, totalTasks, name, type, payPerTask, collectedTasksJson]
+        const [taskIndexStr, totalTasksStr, name, type, payPerTaskStr, collectedJson] = params;
+        const taskIndex = parseInt(taskIndexStr);
+        const totalTasks = parseInt(totalTasksStr);
+        const payPerTask = parseFloat(payPerTaskStr);
+
+        let collectedTasks: { comment: string; redditLink: string }[] = [];
         try {
-          tasks = JSON.parse(tasksJson);
+          collectedTasks = JSON.parse(collectedJson);
         } catch {
-          await interaction.reply({ content: '❌ Invalid JSON format', ephemeral: true });
+          // ignore, start fresh
+        }
+
+        const modal = {
+          customId: `create_batch_task:${taskIndex}:${name}:${type}:${totalTasks}:${payPerTask}:${JSON.stringify([])}`,
+          title: `Task ${taskIndex} of ${totalTasks}`,
+          components: [
+            {
+              type: 1,
+              components: [
+                { type: 4, customId: 'task_comment', label: 'Comment', style: 2, required: true, maxLength: 1000, placeholder: 'Enter the comment to post' },
+              ],
+            },
+            {
+              type: 1,
+              components: [
+                { type: 4, customId: 'task_link', label: 'Reddit Link', style: 1, required: true, maxLength: 500, placeholder: 'https://reddit.com/r/.../comments/...' },
+              ],
+            },
+          ],
+        };
+
+        await interaction.showModal(modal);
+        break;
+      }
+
+      case 'create_batch_task_submit': {
+        const [taskIndexStr, totalTasksStr, name, type, payPerTaskStr, collectedJson] = params;
+        const taskIndex = parseInt(taskIndexStr);
+        const totalTasks = parseInt(totalTasksStr);
+        const payPerTask = parseFloat(payPerTaskStr);
+
+        let collectedTasks: { comment: string; redditLink: string }[] = [];
+        try {
+          collectedTasks = JSON.parse(collectedJson);
+        } catch {
+          collectedTasks = [];
+        }
+
+        const comment = interaction.fields.getTextInputValue('task_comment');
+        const link = interaction.fields.getTextInputValue('task_link');
+
+        if (!comment || !link) {
+          await interaction.reply({ content: '❌ Both comment and link are required', ephemeral: true });
           return;
         }
 
-        if (!Array.isArray(tasks) || tasks.length !== taskCount) {
-          await interaction.reply({ content: `❌ Must provide exactly ${taskCount} tasks`, ephemeral: true });
-          return;
+        collectedTasks.push({ comment, redditLink: link });
+
+        if (taskIndex < totalTasks) {
+          // Show next task modal
+          const nextIndex = taskIndex + 1;
+          const modal = {
+            customId: `create_batch_task:${nextIndex}:${name}:${type}:${totalTasks}:${payPerTask}:${JSON.stringify(collectedTasks)}`,
+            title: `Task ${nextIndex} of ${totalTasks}`,
+            components: [
+              {
+                type: 1,
+                components: [
+                  { type: 4, customId: 'task_comment', label: 'Comment', style: 2, required: true, maxLength: 1000, placeholder: 'Enter the comment to post' },
+                ],
+              },
+              {
+                type: 1,
+                components: [
+                  { type: 4, customId: 'task_link', label: 'Reddit Link', style: 1, required: true, maxLength: 500, placeholder: 'https://reddit.com/r/.../comments/...' },
+                ],
+              },
+            ],
+          };
+          await interaction.showModal(modal);
+        } else {
+          // All tasks collected, create batch
+          const tasks = collectedTasks;
+          const config = getConfig();
+
+          const batch = await taskService.createBatch({
+            name,
+            type: type as TaskType,
+            taskCount: totalTasks,
+            payPerTask,
+            minKarma: config.MIN_REDDIT_KARMA,
+            minAccountAge: config.MIN_REDDIT_ACCOUNT_AGE_DAYS,
+            createdBy: interaction.user.id,
+            guildId: interaction.guildId!,
+            tasks,
+          });
+
+          await interaction.reply({ content: `✅ Batch created: ${name} (${batch.id}) with ${tasks.length} tasks`, ephemeral: true });
         }
-
-        for (const task of tasks) {
-          if (!task.comment || !task.redditLink) {
-            await interaction.reply({ content: '❌ Each task must have comment and reddit_link', ephemeral: true });
-            return;
-          }
-        }
-
-        const batch = await taskService.createBatch({
-          name,
-          type: type as TaskType,
-          taskCount,
-          payPerTask,
-          minKarma: config.MIN_REDDIT_KARMA,
-          minAccountAge: config.MIN_REDDIT_ACCOUNT_AGE_DAYS,
-          createdBy: interaction.user.id,
-          guildId: interaction.guildId!,
-          tasks,
-        });
-
-        await interaction.reply({ content: `✅ Batch created: ${batch.name} (${batch.id}) with ${tasks.length} tasks`, ephemeral: true });
         break;
       }
 
