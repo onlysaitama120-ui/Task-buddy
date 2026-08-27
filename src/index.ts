@@ -231,6 +231,14 @@ client.once(Events.ClientReady, async (readyClient) => {
             ],
           },
           {
+            name: 'announcecustom',
+            description: 'Post a custom announcement message (task-mod only)',
+            options: [
+              { name: 'message', description: 'The message to post', type: 3, required: true },
+              { name: 'channel', description: 'Channel to post in (defaults to announcement channel)', type: 7, required: false },
+            ],
+          },
+          {
             name: 'batches',
             description: 'List all task batches (task-mod only)',
           },
@@ -560,6 +568,38 @@ async function handleSlashCommand(interaction: any) {
         await taskService.updateBatchAnnouncement(batchId, message.id, announcementChannel.id);
 
         await interaction.reply({ content: `✅ Batch announced in <#${announcementChannel.id}>`, ephemeral: true });
+        break;
+      }
+
+      case 'announcecustom': {
+        requireTaskMod(member);
+
+        const guildId = interaction.guildId!;
+        await requireAuthorizedGuild(guildId);
+
+        const message = options.getString('message');
+        const channelOption = options.getChannel('channel');
+
+        // Determine target channel: specified channel or configured announcement channel
+        let targetChannel;
+        if (channelOption && channelOption.isTextBased()) {
+          targetChannel = channelOption;
+        } else {
+          const botConfig = await taskService.configRepo.get(guildId);
+          const announcementChannelId = botConfig?.announcementChannelId;
+          if (!announcementChannelId) {
+            await interaction.reply({ content: '❌ Announcement channel not configured. Use /config or /setup, or specify a channel.', ephemeral: true });
+            return;
+          }
+          targetChannel = guild.channels.cache.get(announcementChannelId);
+          if (!targetChannel || !targetChannel.isTextBased()) {
+            await interaction.reply({ content: '❌ Announcement channel not found or invalid.', ephemeral: true });
+            return;
+          }
+        }
+
+        await targetChannel.send(message);
+        await interaction.reply({ content: `✅ Announcement posted in <#${targetChannel.id}>`, ephemeral: true });
         break;
       }
 
