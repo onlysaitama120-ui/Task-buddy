@@ -1,6 +1,7 @@
 import { TaskType, BatchStatus, TaskStatus } from '@prisma/client';
 import { TaskBatchRepository, TaskRepository, TaskClaimRepository, TicketRepository, TaskEventRepository, BotConfigRepository } from '../database/repositories';
 import { getConfig } from '../config';
+import { prisma } from '../database/prisma/client';
 
 export interface CreateBatchData {
   name: string;
@@ -77,7 +78,6 @@ export class TaskService {
       const task = await tx.task.findFirst({
         where: { batchId, status: TaskStatus.AVAILABLE },
         orderBy: { createdAt: 'asc' },
-        lock: { mode: 'FOR UPDATE' },
       });
       if (!task) return null;
 

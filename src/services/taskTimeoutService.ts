@@ -8,22 +8,31 @@ export class TaskTimeoutService {
   /** Scan for claims whose due‑date has passed and time‑out them. */
   async processTimeouts() {
     const now = new Date();
-    const overdue = await prisma.taskClaim.findMany({
+    
+    // Find overdue claims by joining with Task to check dueAt
+    const overdueClaims = await prisma.taskClaim.findMany({
       where: {
         status: { in: [TaskStatus.CLAIMED, TaskStatus.IN_PROGRESS] },
-        dueAt: { lt: now },
+        task: {
+          dueAt: { lt: now },
+        },
+      },
+      include: {
+        task: true,
+        ticket: true,
       },
     });
 
-    for (const claim of overdue) {
+    for (const claim of overdueClaims) {
       await prisma.taskClaim.update({
         where: { id: claim.id },
         data: { status: TaskStatus.TIMED_OUT, reviewedAt: now, reviewedBy: 'system' },
       });
 
-      if (claim.ticketId) {
+      // Close associated ticket if exists
+      if (claim.ticket) {
         await prisma.ticket.update({
-          where: { id: claim.ticketId },
+          where: { id: claim.ticket.id },
           data: { isClosed: true, closedAt: now, closedBy: 'system' },
         });
       }

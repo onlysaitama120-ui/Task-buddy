@@ -39,7 +39,7 @@ export function registerVerificationInteraction(client: Client) {
     const firstRow = new ActionRowBuilder<TextInputBuilder>().addComponents(urlInput);
     modal.addComponents(firstRow);
 
-    await button.showModal(modal);
+    await button.showModal(modal as any);
   });
 
   // ---- Process the modal submission ----
