@@ -321,6 +321,13 @@ function parseAccountAge(input: string): number {
           const accountAgeDays = Math.floor((Date.now() / 1000 - userInfo.created_utc) / 86400);
           const totalKarma = userInfo.link_karma + userInfo.comment_karma;
           
+          // Ensure User row exists before creating RedditAccount
+          await prisma.user.upsert({
+            where: { id: user.id },
+            update: { username: user.username, discriminator: user.discriminator || null, avatar: user.avatarURL() || null },
+            create: { id: user.id, username: user.username, discriminator: user.discriminator || null, avatar: user.avatarURL() || null },
+          });
+          
           await accountService.registerAccount(user.id, userInfo.name, totalKarma, accountAgeDays);
           
           const guildId = interaction.guildId!;
@@ -335,6 +342,13 @@ function parseAccountAge(input: string): number {
         // Mode 2: Manual entry (for private profiles)
         if (username && karma !== null && accountAgeStr) {
           const accountAge = parseAccountAge(accountAgeStr);
+          
+          // Ensure User row exists before creating RedditAccount
+          await prisma.user.upsert({
+            where: { id: user.id },
+            update: { username: user.username, discriminator: user.discriminator || null, avatar: user.avatarURL() || null },
+            create: { id: user.id, username: user.username, discriminator: user.discriminator || null, avatar: user.avatarURL() || null },
+          });
           
           await accountService.registerAccount(user.id, username, karma, accountAge);
           
