@@ -25,9 +25,6 @@ export function registerVerificationInteraction(client: Client) {
     const button = interaction as ButtonInteraction;
     if (button.customId !== 'verify_reddit') return;
 
-    // Defer the modal immediately to avoid timeout
-    await button.deferReply({ ephemeral: true }).catch(() => {});
-
     const modal = new ModalBuilder()
       .setCustomId('verify_reddit_modal')
       .setTitle('Reddit Account Verification');
@@ -43,7 +40,6 @@ export function registerVerificationInteraction(client: Client) {
     modal.addComponents(firstRow);
 
     await button.showModal(modal as any);
-    await button.deleteReply().catch(() => {});
   });
 
   // ---- Process the modal submission ----
