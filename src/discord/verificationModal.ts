@@ -48,7 +48,12 @@ export function registerVerificationInteraction(client: Client) {
     if (interaction.customId !== 'verify_reddit_modal') return;
 
     // Defer reply immediately to avoid "didn't respond in time"
-    await interaction.deferReply({ ephemeral: true });
+    try {
+      await interaction.deferReply({ ephemeral: true });
+    } catch (deferErr) {
+      console.error('Failed to defer reply:', deferErr);
+      return;
+    }
 
     const redditUrl = interaction.fields.getTextInputValue('reddit_url');
 
@@ -57,9 +62,13 @@ export function registerVerificationInteraction(client: Client) {
     const username = match ? match[1] : null;
 
     if (!username) {
-      await interaction.editReply({
-        content: '❌ Could not parse a Reddit username from the URL. Please try again.',
-      });
+      try {
+        await interaction.editReply({
+          content: '❌ Could not parse a Reddit username from the URL. Please try again.',
+        });
+      } catch (editErr) {
+        console.error('Failed to edit reply (invalid username):', editErr);
+      }
       return;
     }
 
@@ -87,9 +96,13 @@ export function registerVerificationInteraction(client: Client) {
       });
     } catch (err) {
       console.error('Error linking Reddit account:', err);
-      await interaction.editReply({
-        content: '❌ Failed to link Reddit account. Please contact an admin.',
-      });
+      try {
+        await interaction.editReply({
+          content: '❌ Failed to link Reddit account. Please contact an admin.',
+        });
+      } catch (editErr) {
+        console.error('Failed to edit reply (error case):', editErr);
+      }
     }
   });
 }
