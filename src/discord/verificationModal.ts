@@ -47,6 +47,9 @@ export function registerVerificationInteraction(client: Client) {
     if (!interaction.isModalSubmit()) return;
     if (interaction.customId !== 'verify_reddit_modal') return;
 
+    // Defer reply immediately to avoid "didn't respond in time"
+    await interaction.deferReply({ ephemeral: true });
+
     const redditUrl = interaction.fields.getTextInputValue('reddit_url');
 
     // **Correct regex – extracts the username from a Reddit profile URL**
@@ -54,9 +57,8 @@ export function registerVerificationInteraction(client: Client) {
     const username = match ? match[1] : null;
 
     if (!username) {
-      await interaction.reply({
+      await interaction.editReply({
         content: '❌ Could not parse a Reddit username from the URL. Please try again.',
-        ephemeral: true,
       });
       return;
     }
@@ -72,15 +74,13 @@ export function registerVerificationInteraction(client: Client) {
         placeholderKarma,
         placeholderAge
       );
-      await interaction.reply({
+      await interaction.editReply({
         content: `✅ Reddit account **${username}** linked successfully!`,
-        ephemeral: true,
       });
     } catch (err) {
       console.error('Error linking Reddit account:', err);
-      await interaction.reply({
+      await interaction.editReply({
         content: '❌ Failed to link Reddit account. Please contact an admin.',
-        ephemeral: true,
       });
     }
   });
