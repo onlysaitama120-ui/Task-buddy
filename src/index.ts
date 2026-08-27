@@ -937,6 +937,11 @@ async function handleButton(interaction: any) {
                 { type: 4, customId: 'task_count', label: 'Number of Tasks', style: 1, required: true, maxLength: 5 },
                 { type: 4, customId: 'pay_per_task', label: 'Pay per Task (USD)', style: 1, required: true, maxLength: 10 },
                 { type: 4, customId: 'min_karma', label: 'Min Karma (optional)', style: 1, required: false, maxLength: 10 },
+              ],
+            },
+            {
+              type: 1,
+              components: [
                 { type: 4, customId: 'min_account_age', label: 'Min Account Age in days (optional)', style: 1, required: false, maxLength: 10 },
               ],
             },
