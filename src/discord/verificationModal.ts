@@ -68,12 +68,20 @@ export function registerVerificationInteraction(client: Client) {
     const placeholderAge = 0;
 
     try {
-      await accountService.registerAccount(
+      // Add timeout to prevent interaction timeout
+      const registrationPromise = accountService.registerAccount(
         interaction.user.id,
         username,
         placeholderKarma,
         placeholderAge
       );
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Database operation timed out')), 2500)
+      );
+      
+      await Promise.race([registrationPromise, timeoutPromise]);
+      
       await interaction.editReply({
         content: `✅ Reddit account **${username}** linked successfully!`,
       });
