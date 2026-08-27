@@ -484,7 +484,7 @@ async function handleSlashCommand(interaction: any) {
                   customId: 'tasks_json',
                   label: 'Tasks (JSON array)',
                   style: 2,
-                  placeholder: '[{"comment": "Great post!", "reddit_link": "https://reddit.com/r/.../comments/..."}, ...]',
+                  placeholder: '[{"comment":"...","reddit_link":"https://reddit.com/..."},...]',
                   required: true,
                   maxLength: 4000,
                 },
@@ -914,10 +914,19 @@ async function handleButton(interaction: any) {
       }
 
       case 'dash_verify': {
-        await interaction.deferReply({ ephemeral: true });
-        await interaction.editReply({ content: 'Please use `/register reddit_profile:<your_profile_url>` to verify your account.' });
+        await interaction.showModal({
+          customId: 'verify_reddit_modal',
+          title: 'Verify Reddit Account',
+          components: [
+            {
+              type: 1,
+              components: [
+                { type: 4, customId: 'reddit_profile', label: 'Reddit Profile URL', style: 1, required: true, maxLength: 100, placeholder: 'https://reddit.com/u/yourusername' },
+              ],
+            },
+          ],
+        });
         break;
-      }
 
       case 'dash_unverify': {
         await interaction.deferReply({ ephemeral: true });
@@ -975,10 +984,9 @@ async function handleButton(interaction: any) {
                 { type: 4, customId: 'pay_per_task', label: 'Pay per Task (USD)', style: 1, required: true, maxLength: 10, placeholder: 'e.g. 0.50' },
               ],
             },
-            {
-              type: 1,
+type: 1,
               components: [
-                { type: 4, customId: 'tasks_input', label: 'Tasks (one per line: comment | reddit_url)', style: 2, required: true, maxLength: 4000, placeholder: 'Great post! | https://reddit.com/r/.../comments/abc123//nThanks! | https://reddit.com/r/.../comments/def456//n/n(One task per line: comment | reddit_url)' },
+                { type: 4, customId: 'tasks_input', label: 'Tasks (one per line: comment | reddit_url)', style: 2, required: true, maxLength: 4000, placeholder: 'Great post! | https://r/.../nThanks! | https://r/.../def456' },
               ],
             },
           ],
@@ -1126,7 +1134,25 @@ async function handleModal(interaction: any) {
         break;
       }
 
-      case 'create_batch_task': {
+      case 'verify_reddit_modal': {
+        const redditProfile = interaction.fields.getTextInputValue('reddit_profile');
+        await interaction.deferReply({ ephemeral: true });
+        
+        const extractedUsername = extractRedditUsername(redditProfile);
+        const redditScraper = new RedditScraperService();
+        const userInfo = await redditScraper.fetchUserInfo(extractedUsername);
+        
+        if (!userInfo) {
+          await interaction.editReply({ content: '❌ Could not fetch Reddit profile. Make sure the profile is public and the username is correct.' });
+          return;
+        }
+        
+        await accountService.registerAccount(interaction.user.id, userInfo.username, userInfo.link_karma, userInfo.accountAge);
+        const status = await verificationService.getVerificationStatus(interaction.user.id, interaction.guildId!);
+        
+        await interaction.editReply({ embeds: [createVerificationStatusEmbed(status)], ephemeral: true });
+        break;
+      }
         // params: [taskIndex, totalTasks, name, type, payPerTask, collectedTasksJson]
         const [taskIndexStr, totalTasksStr, name, type, payPerTaskStr, collectedJson] = params;
         const taskIndex = parseInt(taskIndexStr);

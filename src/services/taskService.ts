@@ -71,32 +71,55 @@ export class TaskService {
     const deadlineMinutes = botConfig?.taskDeadlineMinutes ?? config.TASK_DEADLINE_MINUTES;
     const dueAt = new Date(Date.now() + deadlineMinutes * 60 * 1000);
 
-    const task = await this.taskRepo.findAvailableByBatch(batchId);
-    if (!task) {
-      throw new Error('No available tasks in this batch');
-    }
+    // Use a transaction to avoid race conditions when multiple users try to claim the same task
+    const result = await prisma.$transaction(async (tx) => {
+      // Find the first AVAILABLE task for the batch with a row‑level lock
+      const task = await tx.task.findFirst({
+        where: { batchId, status: TaskStatus.AVAILABLE },
+        orderBy: { createdAt: 'asc' },
+        lock: { mode: 'FOR UPDATE' },
+      });
+      if (!task) return null;
 
-    const claimedTask = await this.taskRepo.claim(task.id, userId, dueAt);
-    if (!claimedTask) {
-      throw new Error('Task was already claimed by another user');
-    }
+      // Claim the task
+      const claimedTask = await tx.task.update({
+        where: { id: task.id },
+        data: { status: TaskStatus.CLAIMED, assignedTo: userId, claimedAt: new Date(), dueAt },
+      });
 
-    const batch = await this.batchRepo.findById(batchId);
-    if (!batch) {
-      throw new Error('Batch not found');
-    }
+      // Get the batch (needed for pay amount)
+      const batch = await tx.taskBatch.findUnique({ where: { id: batchId } });
+      if (!batch) throw new Error('Batch not found');
 
-    const claim = await this.claimRepo.create({
-      userId,
-      redditAccountId,
-      taskId: task.id,
-      batchId,
-      payAmount: Number(batch.payPerTask),
+      // Create the claim record
+      const claim = await tx.taskClaim.create({
+        data: {
+          userId,
+          redditAccountId,
+          taskId: task.id,
+          batchId,
+          payAmount: Number(batch.payPerTask),
+          status: TaskStatus.CLAIMED,
+        },
+      });
+
+      // Log the claim event
+      await tx.taskEvent.create({
+        data: {
+          claimId: claim.id,
+          type: 'CLAIMED',
+          description: `Task claimed by user ${userId}`,
+          metadata: { taskId: task.id },
+        },
+      });
+
+      return { claim, task: claimedTask };
     });
 
-    await this.eventRepo.create(claim.id, 'CLAIMED', `Task claimed by user ${userId}`, { taskId: task.id });
-
-    return { claim, task: claimedTask };
+    if (!result) {
+      throw new Error('No available tasks in this batch or task already claimed');
+    }
+    return result;
   }
 
   async getClaimById(claimId: string) {
