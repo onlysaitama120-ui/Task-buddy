@@ -89,6 +89,27 @@ function extractRedditUsername(input: string): string {
   return stripRedditPrefix(input.trim());
 }
 
+function parseTasksInput(input: string): { comment: string; redditLink: string }[] {
+  const lines = input.trim().split('/n').filter(line => line.trim().length > 0);
+  const tasks: { comment: string; redditLink: string }[] = [];
+  
+  for (const line of lines) {
+    const parts = line.split('|').map(p => p.trim());
+    if (parts.length !== 2) {
+      throw new Error(`Invalid format: "${line}". Use: comment | https://reddit.com/...`);
+    }
+    const [comment, link] = parts;
+    if (!comment || !link) {
+      throw new Error(`Invalid format: "${line}". Both comment and link required.`);
+    }
+    if (!link.startsWith('http')) {
+      throw new Error(`Invalid URL: "${link}". Must be a valid URL.`);
+    }
+    tasks.push({ comment, redditLink: link });
+  }
+  return tasks;
+}
+
 function parseAccountAge(input: string): number {
   const cleaned = input.trim().toLowerCase();
   const match = cleaned.match(new RegExp('^(\d+)\s*([dwmy])$', 'i'));
@@ -927,8 +948,8 @@ async function handleButton(interaction: any) {
         await requireAuthorizedGuild(guildId);
 
         const modal = {
-          customId: 'create_batch_step1',
-          title: 'Create Task Batch (Step 1/2)',
+          customId: 'create_batch_modal',
+          title: 'Create Task Batch',
           components: [
             {
               type: 1,
@@ -945,13 +966,19 @@ async function handleButton(interaction: any) {
             {
               type: 1,
               components: [
-                { type: 4, customId: 'task_count', label: 'Number of Tasks', style: 1, required: true, maxLength: 2, placeholder: '1-20' },
+                { type: 4, customId: 'task_count', label: 'Number of Tasks (1-20)', style: 1, required: true, maxLength: 2, placeholder: '1-20' },
               ],
             },
             {
               type: 1,
               components: [
                 { type: 4, customId: 'pay_per_task', label: 'Pay per Task (USD)', style: 1, required: true, maxLength: 10, placeholder: 'e.g. 0.50' },
+              ],
+            },
+            {
+              type: 1,
+              components: [
+                { type: 4, customId: 'tasks_input', label: 'Tasks (one per line: comment | reddit_url)', style: 2, required: true, maxLength: 4000, placeholder: 'Great post! | https://reddit.com/r/.../comments/abc123//nThanks! | https://reddit.com/r/.../comments/def456//n/n(One task per line: comment | reddit_url)' },
               ],
             },
           ],
@@ -1235,29 +1262,21 @@ async function handleModal(interaction: any) {
       }
 
       case 'create_batch_modal': {
-        const [name, type, taskCountStr, payPerTaskStr, minKarmaStr, minAccountAgeStr] = params;
+        const [name, type, taskCountStr, payPerTaskStr] = params;
         const taskCount = parseInt(taskCountStr);
         const payPerTask = parseFloat(payPerTaskStr);
-        const minKarma = parseInt(minKarmaStr);
-        const minAccountAge = parseInt(minAccountAgeStr);
 
-        const tasksJson = interaction.fields.getTextInputValue('tasks_json');
-        let tasks: { comment: string; redditLink: string }[];
-        try {
-          tasks = JSON.parse(tasksJson);
-        } catch {
-          await interaction.reply({ content: '❌ Invalid JSON format', ephemeral: true });
-          return;
-        }
+        const tasksInput = interaction.fields.getTextInputValue('tasks_input');
+        const tasks = parseTasksInput(tasksInput);
 
-        if (!Array.isArray(tasks) || tasks.length !== taskCount) {
-          await interaction.reply({ content: `❌ Must provide exactly ${taskCount} tasks`, ephemeral: true });
+        if (tasks.length !== taskCount) {
+          await interaction.reply({ content: `❌ Must provide exactly ${taskCount} tasks (one per line)`, ephemeral: true });
           return;
         }
 
         for (const task of tasks) {
           if (!task.comment || !task.redditLink) {
-            await interaction.reply({ content: '❌ Each task must have comment and reddit_link', ephemeral: true });
+            await interaction.reply({ content: '❌ Each task must have both comment and reddit URL', ephemeral: true });
             return;
           }
         }
@@ -1267,15 +1286,15 @@ async function handleModal(interaction: any) {
           type: type as TaskType,
           taskCount,
           payPerTask,
-          minKarma,
-          minAccountAge,
+          minKarma: config.MIN_REDDIT_KARMA,
+          minAccountAge: config.MIN_REDDIT_ACCOUNT_AGE_DAYS,
           createdBy: interaction.user.id,
           guildId: interaction.guildId!,
           tasks,
         });
 
         await interaction.reply({ content: `✅ Batch created: ${batch.name} (${batch.id}) with ${tasks.length} tasks`, ephemeral: true });
-        break;
+break;
       }
     }
   } catch (error: any) {
