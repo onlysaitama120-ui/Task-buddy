@@ -3,6 +3,7 @@ import { loadConfig } from './config';
 import { registerVerificationInteraction } from './discord/verificationInteraction';
 import { startTimeoutWorker } from './cron/timeoutCron';
 import { createServer } from 'http';
+import { prisma } from './database/prisma/client';
 
 const config = loadConfig();
 
@@ -14,7 +15,7 @@ const server = createServer((req, res) => {
 });
 server.listen(PORT, () => {
   console.log(`🌐 HTTP server listening on port ${PORT} (for Render)`);
-});
+}
 
 // ---- Discord bot ----
 const client = new Client({
@@ -23,6 +24,15 @@ const client = new Client({
 
 client.once('ready', async () => {
   console.log(`🤖 Bot logged in as ${client.user?.tag}`);
+  
+  // Warm up database connection to avoid first-query latency
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('🔌 Database connection warmed up');
+  } catch (err) {
+    console.error('Failed to warm up database:', err);
+  }
+  
   registerVerificationInteraction(client);
   startTimeoutWorker();
 });
