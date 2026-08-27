@@ -1,4 +1,4 @@
-﻿import { Client, GatewayIntentBits, Partials, Events, REST, Routes, Collection, ChannelType, ChannelSelectMenuBuilder, ActionRowBuilder, ComponentType, ButtonBuilder, ButtonStyle } from 'discord.js';
+﻿import { Client, GatewayIntentBits, Partials, Events, REST, Routes, Collection, ChannelType, ChannelSelectMenuBuilder, ActionRowBuilder, ComponentType, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, EmbedBuilder } from 'discord.js';
 import { loadConfig, getOwnerUserId, getConfig } from './config';
 import { prisma } from './database/prisma/client';
 import { AccountService } from './services/accountService';
@@ -54,7 +54,7 @@ const commands = new Collection<string, any>();
 
 function extractUrls(text: string): string[] {
   const urls: string[] = [];
-  const words = text.split(new RegExp('/s+'));
+  const words = text.split(new RegExp('//s+'));
   for (const word of words) {
     if (word.startsWith('http://') || word.startsWith('https://')) {
       urls.push(word);
@@ -70,10 +70,8 @@ function stripRedditPrefix(input: string): string {
 }
 
 function extractRedditUsername(input: string): string {
-  // Handle full URLs: https://www.reddit.com/user/username/ or /u/username
   const lower = input.trim().toLowerCase();
   
-  // Try to find /user/ or /u/ in the URL
   const userIdx = lower.indexOf('/user/');
   if (userIdx !== -1) {
     const after = input.slice(userIdx + 6);
@@ -88,8 +86,89 @@ function extractRedditUsername(input: string): string {
     return end === -1 ? after : after.slice(0, end);
   }
   
-  // Might be a bare username like "QueasyMarionberry843" or "u/QueasyMarionberry843"
   return stripRedditPrefix(input.trim());
+}
+
+function parseAccountAge(input: string): number {
+  const cleaned = input.trim().toLowerCase();
+  const match = cleaned.match(new RegExp('^(\d+)\s*([dwmy])$', 'i'));
+  if (!match) {
+    throw new Error('Invalid format. Use: 30d, 4w, 6m, 1y (days, weeks, months, years). Examples: 30d, 4w, 6m, 1y, 2w, 3m');
+  }
+  const value = parseInt(match[1]);
+  const unit = match[2];
+  switch (unit) {
+    case 'd': return value;
+    case 'w': return value * 7;
+    case 'm': return value * 30;
+    case 'y': return value * 365;
+    default: throw new Error('Invalid unit. Use d, w, m, or y');
+  }
+}
+
+function sendDashboardEmbed(channel: any, guild: any, taskModRole: any) {
+  const embed = new EmbedBuilder()
+    .setTitle('📊 Task-buddy Dashboard')
+    .setDescription('Welcome to the Task-buddy control panel. Use the buttons below to navigate.')
+    .setColor(0x0099ff)
+    .addFields(
+      { name: '👤 Member Actions', value: 'Available to all verified members', inline: false },
+      { name: '⚙️ Moderator Actions', value: 'Available to task-mods and administrators', inline: false },
+      { name: '📊 Statistics', value: 'View your personal statistics', inline: false },
+    )
+    .setFooter({ text: 'Task-buddy Dashboard • Click a button below' })
+    .setTimestamp();
+
+  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('dash_verify')
+      .setLabel('✅ Verify')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('✅'),
+    new ButtonBuilder()
+      .setCustomId('dash_unverify')
+      .setLabel('❌ Unverify')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('❌'),
+    new ButtonBuilder()
+      .setCustomId('dash_stats')
+      .setLabel('📊 My Stats')
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('📊'),
+  );
+
+  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('dash_createbatch')
+      .setLabel('📦 Create Batch')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('📦'),
+    new ButtonBuilder()
+      .setCustomId('dash_announce')
+      .setLabel('📢 Announce')
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('📢'),
+    new ButtonBuilder()
+      .setCustomId('dash_batches')
+      .setLabel('📋 View Batches')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('📋'),
+  );
+
+  const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId('dash_totalregisters')
+      .setLabel('👥 Total Registered')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('👥'),
+    new ButtonBuilder()
+      .setCustomId('dash_config')
+      .setLabel('⚙️ Config')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('⚙️'),
+  );
+
+  return channel.send({ embeds: [embed], components: [row1, row2, row3] });
 }
 
 client.once(Events.ClientReady, async (readyClient) => {
@@ -99,120 +178,117 @@ client.once(Events.ClientReady, async (readyClient) => {
   try {
     const rest = new REST({ version: '10' }).setToken(config.DISCORD_TOKEN);
     
-    // Delete old global commands to remove duplicates
     await rest.put(Routes.applicationCommands(config.DISCORD_CLIENT_ID), { body: [] });
     console.log('✅ Cleared old global commands');
     
-    // Register commands to ALL guilds instantly
     for (const guild of readyClient.guilds.cache.values()) {
       await rest.put(Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, guild.id), {
         body: [
-        {
-          name: 'register',
-          description: 'Register your Reddit account (auto-verify via profile URL or manual entry)',
-          options: [
-            { name: 'reddit_profile', description: 'Your Reddit profile URL (e.g., https://reddit.com/u/username) - auto-verifies if public', type: 3, required: false },
-            { name: 'username', description: 'Your Reddit username (without u/) - manual entry if profile is private', type: 3, required: false },
-            { name: 'karma', description: 'Your Reddit karma - required if using manual entry', type: 4, required: false },
-            { name: 'account_age', description: 'Account age (e.g., 30d, 4w, 6m, 1y) - required if using manual entry', type: 3, required: false },
-          ],
-        },
-        {
-          name: 'verify',
-          description: 'Check your Reddit account verification status',
-        },
-        {
-          name: 'createbatch',
-          description: 'Create a new task batch (task-mod only)',
-          options: [
-            { name: 'name', description: 'Batch name', type: 3, required: true },
-            { name: 'type', description: 'Task type', type: 3, required: true, choices: [
-              { name: 'Comment', value: 'COMMENT' },
-              { name: 'Post', value: 'POST' },
-              { name: 'Upvote', value: 'UPVOTE' },
-              { name: 'Custom', value: 'CUSTOM' },
-            ]},
-            { name: 'task_count', description: 'Number of tasks in this batch', type: 4, required: true },
-            { name: 'pay_per_task', description: 'Payment per task in USD', type: 10, required: true },
-            { name: 'min_karma', description: 'Minimum karma required', type: 4, required: false },
-            { name: 'min_account_age', description: 'Minimum account age (e.g., 30d, 4w, 6m, 1y)', type: 3, required: false },
-          ],
-        },
-        {
-          name: 'addtasks',
-          description: 'Add tasks to a batch (task-mod only)',
-          options: [
-            { name: 'batch_id', description: 'Batch ID', type: 3, required: true },
-            { name: 'tasks', description: 'Tasks as JSON array: [{"comment": "...", "reddit_link": "..."}]', type: 3, required: true },
-          ],
-        },
-        {
-          name: 'announce',
-          description: 'Announce a batch in the announcement channel (task-mod only)',
-          options: [
-            { name: 'batch_id', description: 'Batch ID to announce', type: 3, required: true },
-          ],
-        },
-        {
-          name: 'batches',
-          description: 'List all task batches (task-mod only)',
-        },
-        {
-          name: 'complete',
-          description: 'Mark a task as completed (task-mod only)',
-          options: [
-            { name: 'claim_id', description: 'Claim ID', type: 3, required: true },
-          ],
-        },
-        {
-          name: 'timeout',
-          description: 'Mark a task as timed out (task-mod only)',
-          options: [
-            { name: 'claim_id', description: 'Claim ID', type: 3, required: true },
-          ],
-        },
-        {
-          name: 'taskstats',
-          description: 'View task statistics for a member',
-          options: [
-            { name: 'member', description: 'Member to check (defaults to yourself)', type: 6, required: false },
-          ],
-        },
-        {
-          name: 'config',
-          description: 'Configure bot settings (task-mod only)',
-          options: [
-            { name: 'announcement_channel', description: 'Announcement channel', type: 7, required: false },
-            { name: 'task_mod_role', description: 'Task moderator role', type: 8, required: false },
-            { name: 'task_category', description: 'Task category', type: 7, required: false },
-            { name: 'min_karma', description: 'Minimum karma', type: 4, required: false },
-            { name: 'min_account_age', description: 'Minimum account age (e.g., 30d, 4w, 6m, 1y)', type: 3, required: false },
-            { name: 'task_deadline', description: 'Task deadline (minutes)', type: 4, required: false },
-          ],
-        },
-        {
-          name: 'authorize',
-          description: 'Authorize a guild to use Task-buddy (bot owner only)',
-          options: [
-            { name: 'guild_id', description: 'Guild ID to authorize', type: 3, required: true },
-          ],
-        },
-        {
-          name: 'deauthorize',
-          description: 'Deauthorize a guild from using Task-buddy (bot owner only)',
-          options: [
-            { name: 'guild_id', description: 'Guild ID to deauthorize', type: 3, required: true },
-          ],
-        },
-        {
-          name: 'setup',
-          description: 'Initial server setup for Task-buddy (server admin only)',
-        },
-      ],
-    });
-    console.log(`✅ Slash commands registered to guild ${guild.id}`);
-  }
-  console.log('✅ Slash commands registered to all guilds');
+          {
+            name: 'register',
+            description: 'Register your Reddit account (auto-verify via profile URL or manual entry)',
+            options: [
+              { name: 'reddit_profile', description: 'Your Reddit profile URL (e.g., https://reddit.com/u/username)', type: 3, required: false },
+              { name: 'username', description: 'Your Reddit username (without u/) - manual entry if profile is private', type: 3, required: false },
+              { name: 'karma', description: 'Your Reddit karma - required if using manual entry', type: 4, required: false },
+              { name: 'account_age', description: 'Account age (e.g., 30d, 4w, 6m, 1y) - required if using manual entry', type: 3, required: false },
+            ],
+          },
+          {
+            name: 'verify',
+            description: 'Check your Reddit account verification status',
+          },
+          {
+            name: 'createbatch',
+            description: 'Create a new task batch (task-mod only)',
+            options: [
+              { name: 'name', description: 'Batch name', type: 3, required: true },
+              { name: 'type', description: 'Task type', type: 3, required: true, choices: [
+                { name: 'Comment', value: 'COMMENT' },
+                { name: 'Post', value: 'POST' },
+                { name: 'Upvote', value: 'UPVOTE' },
+                { name: 'Custom', value: 'CUSTOM' },
+              ]},
+              { name: 'task_count', description: 'Number of tasks in this batch', type: 4, required: true },
+              { name: 'pay_per_task', description: 'Payment per task in USD', type: 10, required: true },
+              { name: 'min_karma', description: 'Minimum karma required', type: 4, required: false },
+              { name: 'min_account_age', description: 'Minimum account age (days)', type: 4, required: false },
+            ],
+          },
+          {
+            name: 'addtasks',
+            description: 'Add tasks to a batch (task-mod only)',
+            options: [
+              { name: 'batch_id', description: 'Batch ID', type: 3, required: true },
+              { name: 'tasks', description: 'Tasks as JSON array: [{"comment": "...", "reddit_link": "..."}]', type: 3, required: true },
+            ],
+          },
+          {
+            name: 'announce',
+            description: 'Announce a batch in the announcement channel (task-mod only)',
+            options: [
+              { name: 'batch_id', description: 'Batch ID to announce', type: 3, required: true },
+            ],
+          },
+          {
+            name: 'batches',
+            description: 'List all task batches (task-mod only)',
+          },
+          {
+            name: 'complete',
+            description: 'Mark a task as completed (task-mod only)',
+            options: [
+              { name: 'claim_id', description: 'Claim ID', type: 3, required: true },
+            ],
+          },
+          {
+            name: 'timeout',
+            description: 'Mark a task as timed out (task-mod only)',
+            options: [
+              { name: 'claim_id', description: 'Claim ID', type: 3, required: true },
+            ],
+          },
+          {
+            name: 'taskstats',
+            description: 'View task statistics for a member',
+            options: [
+              { name: 'member', description: 'Member to check (defaults to yourself)', type: 6, required: false },
+            ],
+          },
+          {
+            name: 'config',
+            description: 'Configure bot settings (task-mod only)',
+            options: [
+              { name: 'announcement_channel', description: 'Announcement channel', type: 7, required: false },
+              { name: 'task_mod_role', description: 'Task moderator role', type: 8, required: false },
+              { name: 'task_category', description: 'Task category', type: 7, required: false },
+              { name: 'min_karma', description: 'Minimum karma', type: 4, required: false },
+              { name: 'min_account_age', description: 'Minimum account age (days)', type: 4, required: false },
+              { name: 'task_deadline', description: 'Task deadline (minutes)', type: 4, required: false },
+            ],
+          },
+          {
+            name: 'authorize',
+            description: 'Authorize a guild to use Task-buddy (bot owner only)',
+            options: [
+              { name: 'guild_id', description: 'Guild ID to authorize', type: 3, required: true },
+            ],
+          },
+          {
+            name: 'deauthorize',
+            description: 'Deauthorize a guild from using Task-buddy (bot owner only)',
+            options: [
+              { name: 'guild_id', description: 'Guild ID to deauthorize', type: 3, required: true },
+            ],
+          },
+          {
+            name: 'setup',
+            description: 'Initial server setup for Task-buddy (server admin only)',
+          },
+        ],
+      });
+      console.log('✅ Slash commands registered');
+    }
   } catch (error) {
     console.error('❌ Failed to register commands:', error);
   }
@@ -258,33 +334,18 @@ client.on(Events.MessageCreate, async (message) => {
   const urls = extractUrls(message.content);
   if (urls.length === 0) return;
 
-for (const url of urls) {
-      if (ProofService.isValidRedditUrl(url)) {
-        if (claim.status === TaskStatus.CLAIMED || claim.status === TaskStatus.IN_PROGRESS) {
-          await taskService.submitProof(claim.id, url);
-          await message.reply(ProofService.formatProofSubmittedMessage(Number(claim.payAmount)));
-        }
-        return;
-}
+  for (const url of urls) {
+    if (ProofService.isValidRedditUrl(url)) {
+      if (claim.status === TaskStatus.CLAIMED || claim.status === TaskStatus.IN_PROGRESS) {
+        await taskService.submitProof(claim.id, url);
+        await message.reply(ProofService.formatProofSubmittedMessage(Number(claim.payAmount)));
+      }
+      return;
+    }
   }
 });
 
-function parseAccountAge(input: string): number {
-  const cleaned = input.trim().toLowerCase();
-  const match = cleaned.match(new RegExp('^(//d+)//s*([dwmy])$', 'i'));
-  if (!match) {
-    throw new Error('Invalid format. Use: 30d, 4w, 6m, 1y (days, weeks, months, years). Examples: 30d, 4w, 6m, 1y, 2w, 3m');
-  }
-  const value = parseInt(match[1]);
-  const unit = match[2];
-  switch (unit) {
-    case 'd': return value;
-    case 'w': return value * 7;
-    case 'm': return value * 30;
-    case 'y': return value * 365;
-    default: throw new Error('Invalid unit. Use d, w, m, or y');
-  }
-}async function handleSlashCommand(interaction: any) {
+async function handleSlashCommand(interaction: any) {
   const { commandName, options, user, member, guild } = interaction;
 
   try {
@@ -295,7 +356,6 @@ function parseAccountAge(input: string): number {
         const karma = options.getInteger('karma');
         const accountAgeStr = options.getString('account_age');
         
-        // Mode 1: Auto-verify via Reddit profile URL
         if (redditProfile) {
           await interaction.deferReply({ ephemeral: true });
           
@@ -321,7 +381,6 @@ function parseAccountAge(input: string): number {
           const accountAgeDays = Math.floor((Date.now() / 1000 - userInfo.created_utc) / 86400);
           const totalKarma = userInfo.link_karma + userInfo.comment_karma;
           
-          // Ensure User row exists before creating RedditAccount
           await prisma.user.upsert({
             where: { id: user.id },
             update: { username: user.username, discriminator: user.discriminator || null, avatar: user.avatarURL() || null },
@@ -339,11 +398,9 @@ function parseAccountAge(input: string): number {
           break;
         }
         
-        // Mode 2: Manual entry (for private profiles)
         if (username && karma !== null && accountAgeStr) {
           const accountAge = parseAccountAge(accountAgeStr);
           
-          // Ensure User row exists before creating RedditAccount
           await prisma.user.upsert({
             where: { id: user.id },
             update: { username: user.username, discriminator: user.discriminator || null, avatar: user.avatarURL() || null },
@@ -359,7 +416,6 @@ function parseAccountAge(input: string): number {
           break;
         }
         
-        // Neither mode complete
         await interaction.reply({ 
           content: '❌ Provide either:/n• `reddit_profile` (Reddit profile URL for auto-verification)/n• OR `username` + `karma` + `account_age` (manual entry for private profiles)', 
           ephemeral: true 
@@ -476,7 +532,7 @@ function parseAccountAge(input: string): number {
         const announcementChannelId = botConfig?.announcementChannelId;
         
         if (!announcementChannelId) {
-          await interaction.reply({ content: '❌ Announcement channel not configured. Use /set announcement in the desired channel.', ephemeral: true });
+          await interaction.reply({ content: '❌ Announcement channel not configured. Use /config or /setup.', ephemeral: true });
           return;
         }
 
@@ -629,7 +685,7 @@ function parseAccountAge(input: string): number {
         if (taskModRole) updates.taskModRoleId = taskModRole.id;
         if (taskCategory) updates.taskCategoryId = taskCategory.id;
         if (minKarma) updates.minKarma = minKarma;
-        if (minAccountAge) updates.minAccountAge = minAccountAge;
+        if (minAccountAge !== undefined) updates.minAccountAge = minAccountAge;
         if (taskDeadline) updates.taskDeadlineMinutes = taskDeadline;
 
         if (Object.keys(updates).length === 0) {
@@ -663,7 +719,6 @@ function parseAccountAge(input: string): number {
       }
 
       case 'setup': {
-        // Only server owner/admins can run initial setup
         if (!member.permissions.has('Administrator') && interaction.guild?.ownerId !== user.id) {
           await interaction.reply({ content: '❌ Only server administrators can run initial setup.', ephemeral: true });
           return;
@@ -672,26 +727,20 @@ function parseAccountAge(input: string): number {
         const guildId = interaction.guildId!;
         await requireAuthorizedGuild(guildId);
 
-        // Create channel select menu for announcement channel
         const channelSelect = new ChannelSelectMenuBuilder()
           .setCustomId(`setup_announcement_channel:${guildId}`)
           .setPlaceholder('Select the announcement channel')
           .setChannelTypes([ChannelType.GuildText])
           .setMinValues(1)
-.setMaxValues(1);
+          .setMaxValues(1);
 
         const row = new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(channelSelect);
 
-await interaction.reply({ 
-          content: `🔧 **Task-buddy Setup**\n\nPlease select the channel where task announcements will be posted:`, 
+        await interaction.reply({ 
+          content: `🔧 **Task-buddy Setup**/n/nPlease select the channel where task announcements will be posted:`, 
           components: [row], 
           ephemeral: true 
         });
-        break;
-      }
-
-      case 'setup_announcement_channel': {
-        // This is handled in handleSelectMenu
         break;
       }
     }
@@ -716,7 +765,7 @@ async function handleButton(interaction: any) {
         const guildId = interaction.guildId!;
         await interaction.deferReply({ ephemeral: true });
 
-const verification = await verificationService.checkVerification(interaction.user.id, guildId);
+        const verification = await verificationService.checkVerification(interaction.user.id, guildId);
         if (!verification.verified) {
           await interaction.editReply({ content: `❌ You need a verified Reddit account to claim tasks.${verification.reason ? '/n' + verification.reason : ''}` });
           return;
@@ -783,7 +832,6 @@ const verification = await verificationService.checkVerification(interaction.use
             }
           }
         } else {
-          // Update announcement using guild-specific config
           const guildId = interaction.guildId!;
           const botConfig = await taskService.configRepo.get(guildId);
           if (botConfig?.announcementChannelId && batch.announcementId) {
@@ -808,6 +856,138 @@ const verification = await verificationService.checkVerification(interaction.use
         }
 
         await interaction.editReply({ content: `✅ Task claimed! Your private ticket: <#${ticketChannel.id}>` });
+        break;
+      }
+
+      case 'dash_verify': {
+        await interaction.deferReply({ ephemeral: true });
+        await interaction.editReply({ content: 'Please use `/register reddit_profile:<your_profile_url>` to verify your account.' });
+        break;
+      }
+
+      case 'dash_unverify': {
+        await interaction.deferReply({ ephemeral: true });
+        const guildId = interaction.guildId!;
+        const redditAccount = await accountService.getAccount(interaction.user.id);
+        if (!redditAccount) {
+          await interaction.editReply({ content: '❌ No Reddit account registered.' });
+          return;
+        }
+        await prisma.redditAccount.delete({ where: { userId: interaction.user.id } });
+        await interaction.editReply({ content: '✅ Your Reddit account has been unlinked. You can register again anytime.' });
+        break;
+      }
+
+      case 'dash_stats': {
+        await interaction.deferReply({ ephemeral: true });
+        const stats = await statisticsService.getUserStatistics(interaction.user.id);
+        const embed = createTaskStatsEmbed({ user: interaction.user }, stats);
+        await interaction.editReply({ embeds: [embed] });
+        break;
+      }
+
+      case 'dash_createbatch': {
+        const member = interaction.member;
+        if (!member.roles.cache.some((r: any) => r.name === 'task-mod')) {
+          await interaction.reply({ content: '❌ Only task-mods can create batches.', ephemeral: true });
+          return;
+        }
+        const modal = {
+          customId: 'create_batch_modal',
+          title: 'Create Task Batch',
+          components: [
+            {
+              type: 1,
+              components: [
+                { type: 4, customId: 'batch_name', label: 'Batch Name', style: 1, required: true, maxLength: 100 },
+                { type: 4, customId: 'batch_type', label: 'Task Type (COMMENT/POST/UPVOTE/CUSTOM)', style: 1, required: true, maxLength: 20 },
+                { type: 4, customId: 'task_count', label: 'Number of Tasks', style: 1, required: true, maxLength: 5 },
+                { type: 4, customId: 'pay_per_task', label: 'Pay per Task (USD)', style: 1, required: true, maxLength: 10 },
+                { type: 4, customId: 'min_karma', label: 'Min Karma (optional)', style: 1, required: false, maxLength: 10 },
+                { type: 4, customId: 'min_account_age', label: 'Min Account Age in days (optional)', style: 1, required: false, maxLength: 10 },
+              ],
+            },
+          ],
+        };
+
+        await interaction.showModal(modal);
+        break;
+      }
+
+      case 'dash_announce': {
+        const member = interaction.member;
+        if (!member.roles.cache.some((r: any) => r.name === 'task-mod')) {
+          await interaction.reply({ content: '❌ Only task-mods can announce batches.', ephemeral: true });
+          return;
+        }
+        const batches = await taskService.getAllBatches(interaction.guildId!);
+        if (batches.length === 0) {
+          await interaction.reply({ content: '❌ No batches available to announce.', ephemeral: true });
+          return;
+        }
+        const batchOptions = batches.slice(0, 25).map(b => ({
+          label: `${b.name} (${b.type})`,
+          value: b.id,
+          description: `${b.taskCount} tasks • $${b.payPerTask.toFixed(2)}/task`,
+        }));
+        const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId('dash_announce_select')
+            .setPlaceholder('Select a batch to announce')
+            .addOptions(batchOptions),
+        );
+        await interaction.reply({ content: 'Select a batch to announce:', components: [row], ephemeral: true });
+        break;
+      }
+
+      case 'dash_batches': {
+        const batches = await taskService.getAllBatches(interaction.guildId!);
+        if (batches.length === 0) {
+          await interaction.reply({ content: 'No batches found.', ephemeral: true });
+          return;
+        }
+        const batchData = await Promise.all(batches.map(async (b) => ({
+          id: b.id,
+          name: b.name,
+          type: b.type,
+          taskCount: b.taskCount,
+          payPerTask: Number(b.payPerTask),
+          status: b.status,
+          availableCount: await taskService.getAvailableTaskCount(b.id),
+        })));
+        const embed = createBatchListEmbed(batchData);
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        break;
+      }
+
+      case 'dash_totalregisters': {
+        const member = interaction.member;
+        if (!member.permissions.has('Administrator') && interaction.guild?.ownerId !== interaction.user.id) {
+          await interaction.reply({ content: '❌ Administrator only.', ephemeral: true });
+          return;
+        }
+        const count = await prisma.redditAccount.count();
+        await interaction.reply({ content: `👥 Total registered accounts: ${count}`, ephemeral: true });
+        break;
+      }
+
+      case 'dash_config': {
+        const member = interaction.member;
+        if (!member.permissions.has('Administrator') && interaction.guild?.ownerId !== interaction.user.id) {
+          await interaction.reply({ content: '❌ Administrator only.', ephemeral: true });
+          return;
+        }
+        const guildId = interaction.guildId!;
+        const botConfig = await taskService.configRepo.get(guildId);
+        const config = getConfig();
+        await interaction.reply({
+          content: `⚙️ **Current Configuration**
+/n/n**Min Karma:** ${botConfig?.minKarma ?? config.MIN_REDDIT_KARMA}
+/n**Min Account Age:** ${botConfig?.minAccountAge ?? config.MIN_REDDIT_ACCOUNT_AGE_DAYS} days
+/n**Task Deadline:** ${botConfig?.taskDeadlineMinutes ?? config.TASK_DEADLINE_MINUTES} minutes
+/n**Announcement Channel:** ${botConfig?.announcementChannelId ? `<#${botConfig.announcementChannelId}>` : 'Not set'}
+/n**Task Mod Role:** ${botConfig?.taskModRoleId ? `<@&${botConfig.taskModRoleId}>` : 'Not set'}
+/n**Task Category:** ${botConfig?.taskCategoryId ? `<#${botConfig.taskCategoryId}>` : 'Not set'}`, ephemeral: true });
         break;
       }
     }
@@ -910,7 +1090,6 @@ async function handleSelectMenu(interaction: any) {
 
         const guild = interaction.guild!;
 
-        // Create task-mod role if it doesn't exist
         let taskModRole = guild.roles.cache.find((r: any) => r.name === 'task-mod');
         if (!taskModRole) {
           taskModRole = await guild.roles.create({
@@ -920,7 +1099,6 @@ async function handleSelectMenu(interaction: any) {
           });
         }
 
-        // Create Task-buddy category if it doesn't exist
         let taskCategory = guild.channels.cache.find((c: any) => c.name === 'Task-buddy' && c.type === 4);
         if (!taskCategory) {
           taskCategory = await guild.channels.create({
@@ -939,12 +1117,41 @@ async function handleSelectMenu(interaction: any) {
           });
         }
 
-// Save all configuration
         await taskService.configRepo.upsert(guildId, {
           announcementChannelId: selectedChannel.id,
           taskModRoleId: taskModRole.id,
           taskCategoryId: taskCategory.id,
         });
+
+        let dashboardChannel = guild.channels.cache.find(
+          (c: any) => c.name === 'dashboard' && c.parentId === taskCategory.id
+        );
+        if (!dashboardChannel) {
+          dashboardChannel = await guild.channels.create({
+            name: 'dashboard',
+            type: ChannelType.GuildText,
+            parent: taskCategory.id,
+            permissionOverwrites: [
+              {
+                id: guild.roles.everyone.id,
+                allow: ['ViewChannel', 'ReadMessageHistory'],
+                deny: ['SendMessages'],
+              },
+              {
+                id: taskModRole.id,
+                allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'ManageMessages'],
+              },
+            ],
+          });
+        }
+
+        await taskService.configRepo.upsert(guildId, {
+          announcementChannelId: selectedChannel.id,
+          taskModRoleId: taskModRole.id,
+          taskCategoryId: taskCategory.id,
+        });
+
+        await sendDashboardEmbed(dashboardChannel, guild, taskModRole);
 
         await interaction.editReply({ 
           content: `✅ **Task-buddy setup complete!**
@@ -955,6 +1162,8 @@ async function handleSelectMenu(interaction: any) {
             `👑 Task-mod role: <@&${taskModRole.id}> (assign this to moderators)
 ` +
             `📁 Task category: ${taskCategory.name}
+` +
+            `📊 Dashboard: <#${dashboardChannel.id}>
 
 ` +
             `Next steps:
@@ -965,6 +1174,52 @@ async function handleSelectMenu(interaction: any) {
 ` +
             `3. Use /announce to post it in the announcement channel`
         });
+        break;
+      }
+
+      case 'dash_announce_select': {
+        const batchId = interaction.values[0];
+        await interaction.deferReply({ ephemeral: true });
+
+        const batch = await taskService.getBatchById(batchId);
+        if (!batch || batch.status !== BatchStatus.ACTIVE) {
+          await interaction.editReply({ content: '❌ Batch not found or not active.', ephemeral: true });
+          return;
+        }
+
+        const guildId = interaction.guildId!;
+        const botConfig = await taskService.configRepo.get(guildId);
+        const announcementChannelId = botConfig?.announcementChannelId;
+        
+        if (!announcementChannelId) {
+          await interaction.editReply({ content: '❌ Announcement channel not configured.', ephemeral: true });
+          return;
+        }
+
+        const announcementChannel = interaction.guild?.channels.cache.get(announcementChannelId);
+        if (!announcementChannel || !announcementChannel.isTextBased()) {
+          await interaction.editReply({ content: '❌ Announcement channel not found or invalid.', ephemeral: true });
+          return;
+        }
+
+        const availableCount = await taskService.getAvailableTaskCount(batchId);
+
+        const { embed, components } = createBatchAnnouncementEmbed({
+          id: batch.id,
+          name: batch.name,
+          type: batch.type,
+          taskCount: batch.taskCount,
+          payPerTask: Number(batch.payPerTask),
+          minKarma: batch.minKarma,
+          minAccountAge: batch.minAccountAge,
+          availableCount,
+        });
+
+        const message = await announcementChannel.send({ embeds: [embed as any], components: components as any });
+
+        await taskService.updateBatchAnnouncement(batchId, message.id, announcementChannel.id);
+
+        await interaction.editReply({ content: `✅ Batch announced in <#${announcementChannel.id}>`, ephemeral: true });
         break;
       }
     }
@@ -997,5 +1252,3 @@ process.on('SIGTERM', async () => {
 });
 
 client.login(config.DISCORD_TOKEN);
-
-
