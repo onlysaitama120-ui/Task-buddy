@@ -1004,7 +1004,7 @@ async function handleButton(interaction: any) {
             },
               { type: 1,
               components: [
-                { type: 4, customId: 'tasks_input', label: 'Tasks (use --- to separate, link on last line)', style: 2, required: true, maxLength: 4000, placeholder: 'comment here...//nhttps://reddit.com/...//n---//nnext task...//nhttps://reddit.com/...' },
+                { type: 4, customId: 'tasks_input', label: 'Tasks --- link last line', style: 2, required: true, maxLength: 4000, placeholder: 'your comment text---reddit url' },
               ],
             },
           ],
