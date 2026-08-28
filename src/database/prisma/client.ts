@@ -4,31 +4,34 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-export const prisma = global.prisma || new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL,
-    },
-  },
+const client = global.prisma || new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+});
+
+client.$use(async (params, next) => {
+  const maxRetries = 3;
+  const retryDelay = 2000;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await next(params);
+    } catch (error: any) {
+      const msg = error.message || '';
+      const isConnErr = msg.includes('database server') || msg.includes('ECONNREFUSED') || error.code === 'P1001';
+      
+      if (isConnErr && attempt < maxRetries) {
+        console.warn('[DB Retry ' + attempt + '/' + maxRetries + '] DB sleeping, retrying in ' + (retryDelay/1000) + 's...');
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        continue;
+      }
+      throw error;
+    }
+  }
 });
 
 if (process.env.NODE_ENV !== 'production') {
-  global.prisma = prisma;
+  global.prisma = client;
 }
 
-// Retry helper for database operations
-export async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      console.warn(`[DB Retry ${i + 1}/${retries}] ${err.message}`);
-      if (i === retries - 1) throw err;
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-  throw new Error('Unreachable');
-}
-
-export default prisma;
+export const prisma = client;
+export default client;
