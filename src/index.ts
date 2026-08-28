@@ -1150,7 +1150,9 @@ async function handleModal(interaction: any) {
     switch (action) {
       case 'create_batch_step1': {
         const name = interaction.fields.getTextInputValue('batch_name');
-        const type = interaction.fields.getTextInputValue('batch_type') as TaskType;
+        const rawType = interaction.fields.getTextInputValue('batch_type').toUpperCase().trim();
+        const typeMap: Record<string, string> = { COMMENT: 'COMMENT', CMT: 'COMMENT', POST: 'POST', UPVOTE: 'UPVOTE', UP: 'UPVOTE', CUSTOM: 'CUSTOM' };
+        const type = (typeMap[rawType] || 'COMMENT') as TaskType;
         const taskCount = parseInt(interaction.fields.getTextInputValue('task_count'));
         const payPerTask = parseFloat(interaction.fields.getTextInputValue('pay_per_task'));
 
@@ -1340,7 +1342,9 @@ async function handleModal(interaction: any) {
 
       case 'create_batch_modal': {
         const name = interaction.fields.getTextInputValue('batch_name');
-        const type = interaction.fields.getTextInputValue('batch_type') as TaskType;
+        const rawType = interaction.fields.getTextInputValue('batch_type').toUpperCase().trim();
+        const typeMap: Record<string, string> = { COMMENT: 'COMMENT', CMT: 'COMMENT', POST: 'POST', UPVOTE: 'UPVOTE', UP: 'UPVOTE', CUSTOM: 'CUSTOM' };
+        const type = (typeMap[rawType] || 'COMMENT') as TaskType;
         const taskCount = parseInt(interaction.fields.getTextInputValue('task_count'));
         const payPerTask = parseFloat(interaction.fields.getTextInputValue('pay_per_task'));
         const tasksInput = interaction.fields.getTextInputValue('tasks_input');
