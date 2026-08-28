@@ -1,6 +1,7 @@
 import { GuildMember, Role } from 'discord.js';
 import { getOwnerUserId } from '../config';
 import { AuthorizedGuildRepository } from '../database/repositories';
+import { withRetry } from '../database/prisma/client';
 
 const authorizedGuildRepo = new AuthorizedGuildRepository();
 
@@ -32,7 +33,7 @@ export function getTaskModRole(guild: { roles: { cache: Map<string, Role> } }): 
 }
 
 export async function requireAuthorizedGuild(guildId: string): Promise<void> {
-  const authorized = await authorizedGuildRepo.isAuthorized(guildId);
+  const authorized = await withRetry(() => authorizedGuildRepo.isAuthorized(guildId));
   if (!authorized) {
     throw new Error('This server is not authorized to use Task-buddy. Contact the bot owner to authorize it.');
   }
