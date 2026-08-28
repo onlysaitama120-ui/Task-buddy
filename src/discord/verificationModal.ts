@@ -47,12 +47,20 @@ export function registerVerificationInteraction(client: Client) {
     if (!interaction.isModalSubmit()) return;
     if (interaction.customId !== 'verify_reddit_modal') return;
 
-    // Defer reply immediately to avoid "didn't respond in time"
+    // Immediately reply (guarantees response within 3s), then edit with result
     try {
-      await interaction.deferReply({ ephemeral: true });
-    } catch (deferErr) {
-      console.error('Failed to defer reply:', deferErr);
-      return;
+      await interaction.reply({
+        content: '⏳ Processing your Reddit verification...',
+        ephemeral: true,
+      });
+    } catch (replyErr) {
+      // Fallback: try deferReply if reply fails
+      try {
+        await interaction.deferReply({ ephemeral: true });
+      } catch (deferErr) {
+        console.error('Both reply and deferReply failed:', replyErr, deferErr);
+        return;
+      }
     }
 
     const redditUrl = interaction.fields.getTextInputValue('reddit_url');
