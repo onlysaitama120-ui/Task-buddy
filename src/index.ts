@@ -90,22 +90,34 @@ function extractRedditUsername(input: string): string {
 }
 
 function parseTasksInput(input: string): { comment: string; redditLink: string }[] {
-  const lines = input.trim().split('/n').filter(line => line.trim().length > 0);
+  // Split by --- separator for multi-line tasks
+  const blocks = input.trim().split(/---+/).filter(b => b.trim().length > 0);
   const tasks: { comment: string; redditLink: string }[] = [];
-  
-  for (const line of lines) {
-    const parts = line.split('|').map(p => p.trim());
-    if (parts.length !== 2) {
-      throw new Error(`Invalid format: "${line}". Use: comment | https://reddit.com/...`);
+
+  for (const block of blocks) {
+    const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    // Find the link (last line starting with http)
+    let link = '';
+    let linkIndex = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].startsWith('http')) {
+        link = lines[i];
+        linkIndex = i;
+        break;
+      }
     }
-    const [comment, link] = parts;
-    if (!comment || !link) {
-      throw new Error(`Invalid format: "${line}". Both comment and link required.`);
+    if (!link) {
+      throw new Error('Each task must end with a Reddit URL starting with http');
     }
-    if (!link.startsWith('http')) {
-      throw new Error(`Invalid URL: "${link}". Must be a valid URL.`);
+    const comment = lines.slice(0, linkIndex).join('\n').trim();
+    if (!comment) {
+      throw new Error('Each task must have a comment before the link');
     }
     tasks.push({ comment, redditLink: link });
+  }
+
+  if (tasks.length === 0) {
+    throw new Error('No tasks provided');
   }
   return tasks;
 }
@@ -187,6 +199,11 @@ function sendDashboardEmbed(channel: any, guild: any, taskModRole: any) {
       .setLabel('⚙️ Config')
       .setStyle(ButtonStyle.Secondary)
       .setEmoji('⚙️'),
+    new ButtonBuilder()
+      .setCustomId('dash_reset')
+      .setLabel('🔄 Reset Batch')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('🔄'),
   );
 
   return channel.send({ embeds: [embed], components: [row1, row2, row3] });
@@ -987,7 +1004,7 @@ async function handleButton(interaction: any) {
             },
               { type: 1,
               components: [
-                { type: 4, customId: 'tasks_input', label: 'Tasks (one per line: comment | reddit_url)', style: 2, required: true, maxLength: 4000, placeholder: 'Great post! | https://r/.../nThanks! | https://r/.../def456' },
+                { type: 4, customId: 'tasks_input', label: 'Tasks (use --- to separate, link on last line)', style: 2, required: true, maxLength: 4000, placeholder: 'comment here...//nhttps://reddit.com/...//n---//nnext task...//nhttps://reddit.com/...' },
               ],
             },
           ],
@@ -1081,6 +1098,37 @@ async function handleButton(interaction: any) {
 **Announcement Channel:** ${botConfig?.announcementChannelId ? `<#${botConfig.announcementChannelId}>` : 'Not set'}
 **Task Mod Role:** ${botConfig?.taskModRoleId ? `<@&${botConfig.taskModRoleId}>` : 'Not set'}
 **Task Category:** ${botConfig?.taskCategoryId ? `<#${botConfig.taskCategoryId}>` : 'Not set'}`, ephemeral: true });
+        break;
+      }
+      case 'dash_reset': {
+        const member = interaction.member;
+        if (!member.roles.cache.some((r: any) => r.name === 'task-mod') && !member.permissions.has('Administrator')) {
+          await interaction.reply({ content: 'Only task-mods or admins can reset batches.', ephemeral: true });
+          return;
+        }
+
+        const batches = await taskService.getAllBatches(interaction.guildId!);
+        const activeBatches = batches.filter((b: any) => b.status === 'ACTIVE');
+
+        if (activeBatches.length === 0) {
+          await interaction.reply({ content: 'No active batches to reset.', ephemeral: true });
+          return;
+        }
+
+        const batchOptions = activeBatches.map((b: any) => ({
+          label: b.name,
+          value: b.id,
+          description: `${b.taskCount} tasks - ${b.status}`,
+        }));
+
+        const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId('dash_reset_select')
+            .setPlaceholder('Select a batch to reset')
+            .addOptions(batchOptions),
+        );
+
+        await interaction.reply({ content: 'Select a batch to reset (this will delete all tasks and claims):', components: [selectRow], ephemeral: true });
         break;
       }
     }
@@ -1291,15 +1339,20 @@ async function handleModal(interaction: any) {
       }
 
       case 'create_batch_modal': {
-        const [name, type, taskCountStr, payPerTaskStr] = params;
-        const taskCount = parseInt(taskCountStr);
-        const payPerTask = parseFloat(payPerTaskStr);
-
+        const name = interaction.fields.getTextInputValue('batch_name');
+        const type = interaction.fields.getTextInputValue('batch_type') as TaskType;
+        const taskCount = parseInt(interaction.fields.getTextInputValue('task_count'));
+        const payPerTask = parseFloat(interaction.fields.getTextInputValue('pay_per_task'));
         const tasksInput = interaction.fields.getTextInputValue('tasks_input');
         const tasks = parseTasksInput(tasksInput);
 
+        if (isNaN(taskCount) || taskCount < 1 || taskCount > 20) {
+          await interaction.reply({ content: '❌ Task count must be a number between 1 and 20', ephemeral: true });
+          return;
+        }
+
         if (tasks.length !== taskCount) {
-          await interaction.reply({ content: `❌ Must provide exactly ${taskCount} tasks (one per line)`, ephemeral: true });
+          await interaction.reply({ content: `❌ Must provide exactly ${taskCount} tasks (found ${tasks.length}). Use --- to separate tasks.`, ephemeral: true });
           return;
         }
 
@@ -1495,6 +1548,27 @@ async function handleSelectMenu(interaction: any) {
         await taskService.updateBatchAnnouncement(batchId, message.id, announcementChannel.id);
 
         await interaction.editReply({ content: `✅ Batch announced in <#${announcementChannel.id}>`, ephemeral: true });
+        break;
+      }
+
+      case 'dash_reset_select': {
+        const batchId = interaction.values[0];
+        await interaction.deferReply({ ephemeral: true });
+
+        const batch = await taskService.getBatchById(batchId);
+        if (!batch) {
+          await interaction.editReply({ content: 'Batch not found.' });
+          return;
+        }
+
+        // Delete all tasks in the batch
+        await prisma.task.deleteMany({ where: { batchId } });
+        // Delete all claims in the batch
+        await prisma.taskClaim.deleteMany({ where: { batchId } });
+        // Delete the batch itself
+        await prisma.taskBatch.delete({ where: { id: batchId } });
+
+        await interaction.editReply({ content: `Batch "${batch.name}" has been reset. All tasks and claims deleted.` });
         break;
       }
     }
