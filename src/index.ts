@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Partials, Events, REST, Routes, Collection, ChannelType, ChannelSelectMenuBuilder, ActionRowBuilder, ComponentType, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, EmbedBuilder } from 'discord.js';
+﻿import { Client, GatewayIntentBits, Partials, Events, REST, Routes, Collection, ChannelType, ChannelSelectMenuBuilder, ActionRowBuilder, ComponentType, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, EmbedBuilder } from 'discord.js';
 import { loadConfig, getOwnerUserId, getConfig } from './config';
 import { prisma } from './database/prisma/client';
 import { AccountService } from './services/accountService';
@@ -29,7 +29,7 @@ app.get('/', (req, res) => {
 });
 
 const healthServer = app.listen(PORT, () => {
-  console.log(`?? Health check server listening on port ${PORT}`);
+  console.log(`🏥 Health check server listening on port ${PORT}`);
 });
 
 const client = new Client({
@@ -129,78 +129,78 @@ function parseAccountAge(input: string): number {
 
 function sendDashboardEmbed(channel: any, guild: any, taskModRole: any) {
   const embed = new EmbedBuilder()
-    .setTitle('?? Task-buddy Dashboard')
+    .setTitle('📊 Task-buddy Dashboard')
     .setDescription('Welcome to the Task-buddy control panel. Use the buttons below to navigate.')
     .setColor(0x0099ff)
     .addFields(
-      { name: '?? Member Actions', value: 'Available to all verified members', inline: false },
-      { name: '?? Moderator Actions', value: 'Available to task-mods and administrators', inline: false },
-      { name: '?? Statistics', value: 'View your personal statistics', inline: false },
+      { name: '👤 Member Actions', value: 'Available to all verified members', inline: false },
+      { name: '⚙️ Moderator Actions', value: 'Available to task-mods and administrators', inline: false },
+      { name: '📊 Statistics', value: 'View your personal statistics', inline: false },
     )
-    .setFooter({ text: 'Task-buddy Dashboard � Click a button below' })
+    .setFooter({ text: 'Task-buddy Dashboard • Click a button below' })
     .setTimestamp();
 
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('dash_verify')
-      .setLabel('? Verify')
+      .setLabel('✅ Verify')
       .setStyle(ButtonStyle.Success)
-      .setEmoji('?'),
+      .setEmoji('✅'),
     new ButtonBuilder()
       .setCustomId('dash_unverify')
-      .setLabel('? Unverify')
+      .setLabel('❌ Unverify')
       .setStyle(ButtonStyle.Danger)
-      .setEmoji('?'),
+      .setEmoji('❌'),
     new ButtonBuilder()
       .setCustomId('dash_stats')
-      .setLabel('?? My Stats')
+      .setLabel('📊 My Stats')
       .setStyle(ButtonStyle.Primary)
-      .setEmoji('??'),
+      .setEmoji('📊'),
   );
 
   const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('dash_createbatch')
-      .setLabel('?? Create Batch')
+      .setLabel('📦 Create Batch')
       .setStyle(ButtonStyle.Success)
-      .setEmoji('??'),
+      .setEmoji('📦'),
     new ButtonBuilder()
       .setCustomId('dash_announce')
-      .setLabel('?? Announce')
+      .setLabel('📢 Announce')
       .setStyle(ButtonStyle.Primary)
-      .setEmoji('??'),
+      .setEmoji('📢'),
     new ButtonBuilder()
       .setCustomId('dash_batches')
-      .setLabel('?? View Batches')
+      .setLabel('📋 View Batches')
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji('??'),
+      .setEmoji('📋'),
   );
 
   const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId('dash_totalregisters')
-      .setLabel('?? Total Registered')
+      .setLabel('👥 Total Registered')
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji('??'),
+      .setEmoji('👥'),
     new ButtonBuilder()
       .setCustomId('dash_config')
-      .setLabel('?? Config')
+      .setLabel('⚙️ Config')
       .setStyle(ButtonStyle.Secondary)
-      .setEmoji('??'),
+      .setEmoji('⚙️'),
   );
 
   return channel.send({ embeds: [embed], components: [row1, row2, row3] });
 }
 
 client.once(Events.ClientReady, async (readyClient) => {
-  console.log(`? Logged in as ${readyClient.user.tag}`);
-  console.log(`?? Task-buddy is ready!`);
+  console.log(`✅ Logged in as ${readyClient.user.tag}`);
+  console.log(`🤖 Task-buddy is ready!`);
 
   try {
     const rest = new REST({ version: '10' }).setToken(config.DISCORD_TOKEN);
     
     await rest.put(Routes.applicationCommands(config.DISCORD_CLIENT_ID), { body: [] });
-    console.log('? Cleared old global commands');
+    console.log('✅ Cleared old global commands');
     
     for (const guild of readyClient.guilds.cache.values()) {
       await rest.put(Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, guild.id), {
@@ -315,10 +315,10 @@ client.once(Events.ClientReady, async (readyClient) => {
           },
         ],
       });
-      console.log('? Slash commands registered');
+      console.log('✅ Slash commands registered');
     }
   } catch (error) {
-    console.error('? Failed to register commands:', error);
+    console.error('❌ Failed to register commands:', error);
   }
 });
 
@@ -352,9 +352,9 @@ client.on(Events.MessageCreate, async (message) => {
     if (claim.status === TaskStatus.CLAIMED || claim.status === TaskStatus.IN_PROGRESS || claim.status === TaskStatus.PROOF_SUBMITTED) {
       await taskService.rejectTask(claim.id, message.author.id);
       await statisticsService.recordRejection(message.author.id);
-      await message.reply('? Task rejected. Ticket will be closed.');
+      await message.reply('❌ Task rejected. Ticket will be closed.');
     } else {
-      await message.reply('? Cannot reject task in current status.');
+      await message.reply('❌ Cannot reject task in current status.');
     }
     return;
   }
@@ -394,7 +394,7 @@ async function handleSlashCommand(interaction: any) {
           const userInfo = await redditScraper.fetchUserInfo(extractedUsername);
           
           if (!userInfo) {
-            await interaction.editReply({ content: '? Could not fetch Reddit profile. Make sure the profile is public and the username is correct.' });
+            await interaction.editReply({ content: '❌ Could not fetch Reddit profile. Make sure the profile is public and the username is correct.' });
             return;
           }
           
@@ -402,7 +402,7 @@ async function handleSlashCommand(interaction: any) {
           const verification = redditScraper.verifyUser(userInfo, config.MIN_REDDIT_KARMA, config.MIN_REDDIT_ACCOUNT_AGE_DAYS);
           
           if (!verification.verified) {
-            await interaction.editReply({ content: `? Verification failed: ${verification.reason}` });
+            await interaction.editReply({ content: `❌ Verification failed: ${verification.reason}` });
             return;
           }
           
@@ -421,7 +421,7 @@ async function handleSlashCommand(interaction: any) {
           const status = await verificationService.getVerificationStatus(user.id, guildId);
           
           await interaction.editReply({ 
-            content: `? Verified! u/${userInfo.name} | Karma: ${totalKarma} | Account age: ${accountAgeDays} days` 
+            content: `✅ Verified! u/${userInfo.name} | Karma: ${totalKarma} | Account age: ${accountAgeDays} days` 
           });
           break;
         }
@@ -445,7 +445,7 @@ async function handleSlashCommand(interaction: any) {
         }
         
         await interaction.reply({ 
-          content: '? Provide either:/n� `reddit_profile` (Reddit profile URL for auto-verification)/n� OR `username` + `karma` + `account_age` (manual entry for private profiles)', 
+          content: '❌ Provide either:/n• `reddit_profile` (Reddit profile URL for auto-verification)/n• OR `username` + `karma` + `account_age` (manual entry for private profiles)', 
           ephemeral: true 
         });
         break;
@@ -510,30 +510,30 @@ async function handleSlashCommand(interaction: any) {
         try {
           tasks = JSON.parse(tasksJson);
         } catch {
-          await interaction.reply({ content: '? Invalid JSON format', ephemeral: true });
+          await interaction.reply({ content: '❌ Invalid JSON format', ephemeral: true });
           return;
         }
 
         if (!Array.isArray(tasks) || tasks.length === 0) {
-          await interaction.reply({ content: '? Tasks must be a non-empty array', ephemeral: true });
+          await interaction.reply({ content: '❌ Tasks must be a non-empty array', ephemeral: true });
           return;
         }
 
         for (const task of tasks) {
           if (!task.comment || !task.redditLink) {
-            await interaction.reply({ content: '? Each task must have comment and reddit_link', ephemeral: true });
+            await interaction.reply({ content: '❌ Each task must have comment and reddit_link', ephemeral: true });
             return;
           }
         }
 
         const batch = await taskService.getBatchById(batchId);
         if (!batch) {
-          await interaction.reply({ content: '? Batch not found', ephemeral: true });
+          await interaction.reply({ content: '❌ Batch not found', ephemeral: true });
           return;
         }
 
         await taskService.taskRepo.createMany(batchId, tasks);
-        await interaction.reply({ content: `? Added ${tasks.length} tasks to batch ${batch.name}`, ephemeral: true });
+        await interaction.reply({ content: `✅ Added ${tasks.length} tasks to batch ${batch.name}`, ephemeral: true });
         break;
       }
 
@@ -547,12 +547,12 @@ async function handleSlashCommand(interaction: any) {
         const batch = await taskService.getBatchById(batchId);
 
         if (!batch) {
-          await interaction.reply({ content: '? Batch not found', ephemeral: true });
+          await interaction.reply({ content: '❌ Batch not found', ephemeral: true });
           return;
         }
 
         if (batch.status !== BatchStatus.ACTIVE) {
-          await interaction.reply({ content: '? Batch is not active', ephemeral: true });
+          await interaction.reply({ content: '❌ Batch is not active', ephemeral: true });
           return;
         }
 
@@ -560,13 +560,13 @@ async function handleSlashCommand(interaction: any) {
         const announcementChannelId = botConfig?.announcementChannelId;
         
         if (!announcementChannelId) {
-          await interaction.reply({ content: '? Announcement channel not configured. Use /config or /setup.', ephemeral: true });
+          await interaction.reply({ content: '❌ Announcement channel not configured. Use /config or /setup.', ephemeral: true });
           return;
         }
 
         const announcementChannel = guild.channels.cache.get(announcementChannelId);
         if (!announcementChannel || !announcementChannel.isTextBased()) {
-          await interaction.reply({ content: '? Announcement channel not found or invalid.', ephemeral: true });
+          await interaction.reply({ content: '❌ Announcement channel not found or invalid.', ephemeral: true });
           return;
         }
 
@@ -587,7 +587,7 @@ async function handleSlashCommand(interaction: any) {
 
         await taskService.updateBatchAnnouncement(batchId, message.id, announcementChannel.id);
 
-        await interaction.reply({ content: `? Batch announced in <#${announcementChannel.id}>`, ephemeral: true });
+        await interaction.reply({ content: `✅ Batch announced in <#${announcementChannel.id}>`, ephemeral: true });
         break;
       }
 
@@ -602,7 +602,7 @@ async function handleSlashCommand(interaction: any) {
 
         const modal = {
           customId: `announce_custom_modal:${channelId}`,
-          title: '?? Custom Announcement',
+          title: '📢 Custom Announcement',
           components: [
             {
               type: 1,
@@ -647,13 +647,13 @@ async function handleSlashCommand(interaction: any) {
         const claimId = options.getString('claim_id');
         const claim = await taskService.getClaimById(claimId);
         if (!claim) {
-          await interaction.reply({ content: '? Claim not found', ephemeral: true });
+          await interaction.reply({ content: '❌ Claim not found', ephemeral: true });
           return;
         }
         await taskService.completeTask(claimId, user.id);
         await statisticsService.recordCompletion(claim.userId, Number(claim.payAmount));
 
-        await interaction.reply({ content: '? Task marked as completed', ephemeral: true });
+        await interaction.reply({ content: '✅ Task marked as completed', ephemeral: true });
         break;
       }
 
@@ -666,13 +666,13 @@ async function handleSlashCommand(interaction: any) {
         const claimId = options.getString('claim_id');
         const claim = await taskService.getClaimById(claimId);
         if (!claim) {
-          await interaction.reply({ content: '? Claim not found', ephemeral: true });
+          await interaction.reply({ content: '❌ Claim not found', ephemeral: true });
           return;
         }
         await taskService.timeoutTask(claimId, user.id);
         await statisticsService.recordTimeout(claim.userId);
 
-        await interaction.reply({ content: '? Task marked as timed out', ephemeral: true });
+        await interaction.reply({ content: '⏰ Task marked as timed out', ephemeral: true });
         break;
       }
 
@@ -693,14 +693,14 @@ async function handleSlashCommand(interaction: any) {
 
         const guildId = options.getString('guild_id');
         if (!guildId) {
-          await interaction.reply({ content: '? Guild ID is required.', ephemeral: true });
+          await interaction.reply({ content: '❌ Guild ID is required.', ephemeral: true });
           return;
         }
 
         const authorizedGuildRepo = new AuthorizedGuildRepository();
         await authorizedGuildRepo.authorize(guildId, user.id);
 
-        await interaction.reply({ content: `? Guild ${guildId} has been authorized.`, ephemeral: true });
+        await interaction.reply({ content: `✅ Guild ${guildId} has been authorized.`, ephemeral: true });
         break;
       }
 
@@ -709,14 +709,14 @@ async function handleSlashCommand(interaction: any) {
 
         const guildId = options.getString('guild_id');
         if (!guildId) {
-          await interaction.reply({ content: '? Guild ID is required.', ephemeral: true });
+          await interaction.reply({ content: '❌ Guild ID is required.', ephemeral: true });
           return;
         }
 
         const authorizedGuildRepo = new AuthorizedGuildRepository();
         await authorizedGuildRepo.deauthorize(guildId);
 
-        await interaction.reply({ content: `? Guild ${guildId} has been deauthorized.`, ephemeral: true });
+        await interaction.reply({ content: `✅ Guild ${guildId} has been deauthorized.`, ephemeral: true });
         break;
       }
 
@@ -743,12 +743,12 @@ async function handleSlashCommand(interaction: any) {
         if (taskDeadline) updates.taskDeadlineMinutes = taskDeadline;
 
         if (Object.keys(updates).length === 0) {
-          await interaction.reply({ content: '? No configuration changes provided', ephemeral: true });
+          await interaction.reply({ content: '❌ No configuration changes provided', ephemeral: true });
           return;
         }
 
         await taskService.configRepo.upsert(guildId, updates);
-        await interaction.reply({ content: '? Configuration updated', ephemeral: true });
+        await interaction.reply({ content: '✅ Configuration updated', ephemeral: true });
         break;
       }
 
@@ -762,19 +762,19 @@ async function handleSlashCommand(interaction: any) {
         if (subcommand === 'announcement') {
           const channel = interaction.channel;
           if (!channel || !channel.isTextBased()) {
-            await interaction.reply({ content: '? This command must be used in a text channel', ephemeral: true });
+            await interaction.reply({ content: '❌ This command must be used in a text channel', ephemeral: true });
             return;
           }
 
           await taskService.configRepo.upsert(guildId, { announcementChannelId: channel.id });
-          await interaction.reply({ content: `? Announcement channel set to <#${channel.id}>`, ephemeral: true });
+          await interaction.reply({ content: `✅ Announcement channel set to <#${channel.id}>`, ephemeral: true });
         }
         break;
       }
 
       case 'setup': {
         if (!member.permissions.has('Administrator') && interaction.guild?.ownerId !== user.id) {
-          await interaction.reply({ content: '? Only server administrators can run initial setup.', ephemeral: true });
+          await interaction.reply({ content: '❌ Only server administrators can run initial setup.', ephemeral: true });
           return;
         }
 
@@ -791,7 +791,7 @@ async function handleSlashCommand(interaction: any) {
         const row = new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(channelSelect);
 
         await interaction.reply({ 
-          content: `?? **Task-buddy Setup**/n/nPlease select the channel where task announcements will be posted:`, 
+          content: `🔧 **Task-buddy Setup**/n/nPlease select the channel where task announcements will be posted:`, 
           components: [row], 
           ephemeral: true 
         });
@@ -802,9 +802,9 @@ async function handleSlashCommand(interaction: any) {
     console.error(`Error in ${commandName}:`, error);
     const message = error.message || 'An error occurred';
     if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ content: `? ${message}`, ephemeral: true });
+      await interaction.followUp({ content: `❌ ${message}`, ephemeral: true });
     } else {
-      await interaction.reply({ content: `? ${message}`, ephemeral: true });
+      await interaction.reply({ content: `❌ ${message}`, ephemeral: true });
     }
   }
 }
@@ -821,31 +821,31 @@ async function handleButton(interaction: any) {
 
         const verification = await verificationService.checkVerification(interaction.user.id, guildId);
         if (!verification.verified) {
-          await interaction.editReply({ content: `? You need a verified Reddit account to claim tasks.${verification.reason ? '/n' + verification.reason : ''}` });
+          await interaction.editReply({ content: `❌ You need a verified Reddit account to claim tasks.${verification.reason ? '/n' + verification.reason : ''}` });
           return;
         }
 
         const existingClaim = await taskService.getUserClaimInBatch(interaction.user.id, batchId);
         if (existingClaim) {
-          await interaction.editReply({ content: '? You have already claimed a task from this batch.' });
+          await interaction.editReply({ content: '❌ You have already claimed a task from this batch.' });
           return;
         }
 
         const redditAccount = await accountService.getAccount(interaction.user.id);
         if (!redditAccount) {
-          await interaction.editReply({ content: '? No Reddit account registered. Use /register first.' });
+          await interaction.editReply({ content: '❌ No Reddit account registered. Use /register first.' });
           return;
         }
 
         const batch = await taskService.getBatchById(batchId);
         if (!batch || batch.status !== BatchStatus.ACTIVE) {
-          await interaction.editReply({ content: '? Batch not found or not active.' });
+          await interaction.editReply({ content: '❌ Batch not found or not active.' });
           return;
         }
 
         const availableCount = await taskService.getAvailableTaskCount(batchId);
         if (availableCount === 0) {
-          await interaction.editReply({ content: '? No tasks available in this batch.' });
+          await interaction.editReply({ content: '❌ No tasks available in this batch.' });
           return;
         }
 
@@ -909,7 +909,7 @@ async function handleButton(interaction: any) {
           }
         }
 
-        await interaction.editReply({ content: `? Task claimed! Your private ticket: <#${ticketChannel.id}>` });
+        await interaction.editReply({ content: `✅ Task claimed! Your private ticket: <#${ticketChannel.id}>` });
         break;
       }
 
@@ -934,11 +934,11 @@ async function handleButton(interaction: any) {
         const guildId = interaction.guildId!;
         const redditAccount = await accountService.getAccount(interaction.user.id);
         if (!redditAccount) {
-          await interaction.editReply({ content: '? No Reddit account registered.' });
+          await interaction.editReply({ content: '❌ No Reddit account registered.' });
           return;
         }
         await prisma.redditAccount.delete({ where: { userId: interaction.user.id } });
-        await interaction.editReply({ content: '? Your Reddit account has been unlinked. You can register again anytime.' });
+        await interaction.editReply({ content: '✅ Your Reddit account has been unlinked. You can register again anytime.' });
         break;
       }
 
@@ -985,7 +985,7 @@ async function handleButton(interaction: any) {
                 { type: 4, customId: 'pay_per_task', label: 'Pay per Task (USD)', style: 1, required: true, maxLength: 10, placeholder: 'e.g. 0.50' },
               ],
             },
-            { type: 1,
+              { type: 1,
               components: [
                 { type: 4, customId: 'tasks_input', label: 'Tasks (one per line: comment | reddit_url)', style: 2, required: true, maxLength: 4000, placeholder: 'Great post! | https://r/.../nThanks! | https://r/.../def456' },
               ],
@@ -1000,18 +1000,18 @@ async function handleButton(interaction: any) {
       case 'dash_announce': {
         const member = interaction.member;
         if (!member.roles.cache.some((r: any) => r.name === 'task-mod')) {
-          await interaction.reply({ content: '? Only task-mods can announce batches.', ephemeral: true });
+          await interaction.reply({ content: '❌ Only task-mods can announce batches.', ephemeral: true });
           return;
         }
         const batches = await taskService.getAllBatches(interaction.guildId!);
         if (batches.length === 0) {
-          await interaction.reply({ content: '? No batches available to announce.', ephemeral: true });
+          await interaction.reply({ content: '❌ No batches available to announce.', ephemeral: true });
           return;
         }
         const batchOptions = batches.slice(0, 25).map(b => ({
           label: `${b.name} (${b.type})`,
           value: b.id,
-          description: `${b.taskCount} tasks � $${b.payPerTask.toFixed(2)}/task`,
+          description: `${b.taskCount} tasks • $${b.payPerTask.toFixed(2)}/task`,
         }));
         const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
           new StringSelectMenuBuilder()
@@ -1046,7 +1046,7 @@ async function handleButton(interaction: any) {
       case 'dash_totalregisters': {
         const member = interaction.member;
         if (!member.permissions.has('Administrator') && interaction.guild?.ownerId !== interaction.user.id) {
-          await interaction.reply({ content: '? Administrator only.', ephemeral: true });
+          await interaction.reply({ content: '❌ Administrator only.', ephemeral: true });
           return;
         }
         const accounts = await prisma.redditAccount.findMany({
@@ -1055,25 +1055,25 @@ async function handleButton(interaction: any) {
         });
         const count = accounts.length;
         if (count === 0) {
-          await interaction.reply({ content: '?? No registered accounts yet.', ephemeral: true });
+          await interaction.reply({ content: '👥 No registered accounts yet.', ephemeral: true });
           return;
         }
-        const accountList = accounts.map(a => `� **u/${a.username}** � <@${a.userId}> (Karma: ${a.karma}, Age: ${a.accountAge}d)`).join('/n');
-        await interaction.reply({ content: `?? **Total registered accounts: ${count}**/n/n${accountList}`, ephemeral: true });
+        const accountList = accounts.map(a => `• **u/${a.username}** — <@${a.userId}> (Karma: ${a.karma}, Age: ${a.accountAge}d)`).join('/n');
+        await interaction.reply({ content: `👥 **Total registered accounts: ${count}**/n/n${accountList}`, ephemeral: true });
         break;
       }
 
       case 'dash_config': {
         const member = interaction.member;
         if (!member.permissions.has('Administrator') && interaction.guild?.ownerId !== interaction.user.id) {
-          await interaction.reply({ content: '? Administrator only.', ephemeral: true });
+          await interaction.reply({ content: '❌ Administrator only.', ephemeral: true });
           return;
         }
         const guildId = interaction.guildId!;
         const botConfig = await taskService.configRepo.get(guildId);
         const config = getConfig();
         await interaction.reply({
-          content: `?? **Current Configuration**
+          content: `⚙️ **Current Configuration**
 
 **Min Karma:** ${botConfig?.minKarma ?? config.MIN_REDDIT_KARMA}
 **Min Account Age:** ${botConfig?.minAccountAge ?? config.MIN_REDDIT_ACCOUNT_AGE_DAYS} days
@@ -1088,9 +1088,9 @@ async function handleButton(interaction: any) {
     console.error(`Button error (${action}):`, error);
     const message = error.message || 'An error occurred';
     if (interaction.replied || interaction.deferred) {
-      await interaction.editReply({ content: `? ${message}` });
+      await interaction.editReply({ content: `❌ ${message}` });
     } else {
-      await interaction.reply({ content: `? ${message}`, ephemeral: true });
+      await interaction.reply({ content: `❌ ${message}`, ephemeral: true });
     }
   }
 }
@@ -1107,7 +1107,7 @@ async function handleModal(interaction: any) {
         const payPerTask = parseFloat(interaction.fields.getTextInputValue('pay_per_task'));
 
         if (isNaN(taskCount) || taskCount < 1 || taskCount > 20) {
-          await interaction.reply({ content: '? Task count must be between 1 and 20', ephemeral: true });
+          await interaction.reply({ content: '❌ Task count must be between 1 and 20', ephemeral: true });
           return;
         }
 
@@ -1144,19 +1144,19 @@ async function handleModal(interaction: any) {
         const userInfo = await redditScraper.fetchUserInfo(extractedUsername);
         
         if (!userInfo) {
-          await interaction.editReply({ content: '? Could not fetch Reddit profile. Make sure the profile is public and the username is correct.' });
+          await interaction.editReply({ content: '❌ Could not fetch Reddit profile. Make sure the profile is public and the username is correct.' });
           return;
         }
         
         const accountAge = Math.floor((Date.now() / 1000 - userInfo.created_utc) / 86400);
         await accountService.registerAccount(interaction.user.id, userInfo.name, userInfo.link_karma, accountAge, userInfo.id);
-        
         const status = await verificationService.getVerificationStatus(interaction.user.id, interaction.guildId!);
+        
         await interaction.editReply({ embeds: [createVerificationStatusEmbed(status)], ephemeral: true });
         break;
       }
-      case 'create_batch_task': {
         // params: [taskIndex, totalTasks, name, type, payPerTask, collectedTasksJson]
+      case 'create_batch_task': {
         const [taskIndexStr, totalTasksStr, name, type, payPerTaskStr, collectedJson] = params;
         const taskIndex = parseInt(taskIndexStr);
         const totalTasks = parseInt(totalTasksStr);
@@ -1209,7 +1209,7 @@ async function handleModal(interaction: any) {
         const link = interaction.fields.getTextInputValue('task_link');
 
         if (!comment || !link) {
-          await interaction.reply({ content: '? Both comment and link are required', ephemeral: true });
+          await interaction.reply({ content: '❌ Both comment and link are required', ephemeral: true });
           return;
         }
 
@@ -1254,7 +1254,7 @@ async function handleModal(interaction: any) {
             tasks,
           });
 
-          await interaction.reply({ content: `? Batch created: ${name} (${batch.id}) with ${tasks.length} tasks`, ephemeral: true });
+          await interaction.reply({ content: `✅ Batch created: ${name} (${batch.id}) with ${tasks.length} tasks`, ephemeral: true });
         }
         break;
       }
@@ -1274,19 +1274,19 @@ async function handleModal(interaction: any) {
           const botConfig = await taskService.configRepo.get(guildId);
           const announcementChannelId = botConfig?.announcementChannelId;
           if (!announcementChannelId) {
-            await interaction.reply({ content: '? Announcement channel not configured. Use /config or /setup.', ephemeral: true });
+            await interaction.reply({ content: '❌ Announcement channel not configured. Use /config or /setup.', ephemeral: true });
             return;
           }
           targetChannel = guild.channels.cache.get(announcementChannelId);
         }
 
         if (!targetChannel || !targetChannel.isTextBased()) {
-          await interaction.reply({ content: '? Target channel not found or invalid.', ephemeral: true });
+          await interaction.reply({ content: '❌ Target channel not found or invalid.', ephemeral: true });
           return;
         }
 
         await targetChannel.send(message);
-        await interaction.reply({ content: `? Announcement posted in <#${targetChannel.id}>`, ephemeral: true });
+        await interaction.reply({ content: `✅ Announcement posted in <#${targetChannel.id}>`, ephemeral: true });
         break;
       }
 
@@ -1299,13 +1299,13 @@ async function handleModal(interaction: any) {
         const tasks = parseTasksInput(tasksInput);
 
         if (tasks.length !== taskCount) {
-          await interaction.reply({ content: `? Must provide exactly ${taskCount} tasks (one per line)`, ephemeral: true });
+          await interaction.reply({ content: `❌ Must provide exactly ${taskCount} tasks (one per line)`, ephemeral: true });
           return;
         }
 
         for (const task of tasks) {
           if (!task.comment || !task.redditLink) {
-            await interaction.reply({ content: '? Each task must have both comment and reddit URL', ephemeral: true });
+            await interaction.reply({ content: '❌ Each task must have both comment and reddit URL', ephemeral: true });
             return;
           }
         }
@@ -1322,7 +1322,7 @@ async function handleModal(interaction: any) {
           tasks,
         });
 
-        await interaction.reply({ content: `? Batch created: ${batch.name} (${batch.id}) with ${tasks.length} tasks`, ephemeral: true });
+        await interaction.reply({ content: `✅ Batch created: ${batch.name} (${batch.id}) with ${tasks.length} tasks`, ephemeral: true });
 break;
       }
     }
@@ -1330,9 +1330,9 @@ break;
     console.error(`Modal error (${action}):`, error);
     const message = error.message || 'An error occurred';
     if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ content: `? ${message}`, ephemeral: true });
+      await interaction.followUp({ content: `❌ ${message}`, ephemeral: true });
     } else {
-      await interaction.reply({ content: `? ${message}`, ephemeral: true });
+      await interaction.reply({ content: `❌ ${message}`, ephemeral: true });
     }
   }
 }
@@ -1344,12 +1344,12 @@ async function handleSelectMenu(interaction: any) {
     switch (action) {
       case 'setup_announcement_channel': {
         if (!interaction.guildId || interaction.guildId !== guildId) {
-          await interaction.reply({ content: '? Invalid guild.', ephemeral: true });
+          await interaction.reply({ content: '❌ Invalid guild.', ephemeral: true });
           return;
         }
 
         if (!interaction.member?.permissions.has('Administrator') && interaction.guild?.ownerId !== interaction.user.id) {
-          await interaction.reply({ content: '? Only server administrators can run initial setup.', ephemeral: true });
+          await interaction.reply({ content: '❌ Only server administrators can run initial setup.', ephemeral: true });
           return;
         }
 
@@ -1357,7 +1357,7 @@ async function handleSelectMenu(interaction: any) {
 
         const selectedChannel = interaction.channels.first();
         if (!selectedChannel || !selectedChannel.isTextBased()) {
-          await interaction.reply({ content: '? Please select a valid text channel.', ephemeral: true });
+          await interaction.reply({ content: '❌ Please select a valid text channel.', ephemeral: true });
           return;
         }
 
@@ -1429,16 +1429,16 @@ async function handleSelectMenu(interaction: any) {
         await sendDashboardEmbed(dashboardChannel, guild, taskModRole);
 
         await interaction.editReply({ 
-          content: `? **Task-buddy setup complete!**
+          content: `✅ **Task-buddy setup complete!**
 
 ` +
-            `?? Announcement channel: <#${selectedChannel.id}>
+            `📢 Announcement channel: <#${selectedChannel.id}>
 ` +
-            `?? Task-mod role: <@&${taskModRole.id}> (assign this to moderators)
+            `👑 Task-mod role: <@&${taskModRole.id}> (assign this to moderators)
 ` +
-            `?? Task category: ${taskCategory.name}
+            `📁 Task category: ${taskCategory.name}
 ` +
-            `?? Dashboard: <#${dashboardChannel.id}>
+            `📊 Dashboard: <#${dashboardChannel.id}>
 
 ` +
             `Next steps:
@@ -1458,7 +1458,7 @@ async function handleSelectMenu(interaction: any) {
 
         const batch = await taskService.getBatchById(batchId);
         if (!batch || batch.status !== BatchStatus.ACTIVE) {
-          await interaction.editReply({ content: '? Batch not found or not active.', ephemeral: true });
+          await interaction.editReply({ content: '❌ Batch not found or not active.', ephemeral: true });
           return;
         }
 
@@ -1467,13 +1467,13 @@ async function handleSelectMenu(interaction: any) {
         const announcementChannelId = botConfig?.announcementChannelId;
         
         if (!announcementChannelId) {
-          await interaction.editReply({ content: '? Announcement channel not configured.', ephemeral: true });
+          await interaction.editReply({ content: '❌ Announcement channel not configured.', ephemeral: true });
           return;
         }
 
         const announcementChannel = interaction.guild?.channels.cache.get(announcementChannelId);
         if (!announcementChannel || !announcementChannel.isTextBased()) {
-          await interaction.editReply({ content: '? Announcement channel not found or invalid.', ephemeral: true });
+          await interaction.editReply({ content: '❌ Announcement channel not found or invalid.', ephemeral: true });
           return;
         }
 
@@ -1494,7 +1494,7 @@ async function handleSelectMenu(interaction: any) {
 
         await taskService.updateBatchAnnouncement(batchId, message.id, announcementChannel.id);
 
-        await interaction.editReply({ content: `? Batch announced in <#${announcementChannel.id}>`, ephemeral: true });
+        await interaction.editReply({ content: `✅ Batch announced in <#${announcementChannel.id}>`, ephemeral: true });
         break;
       }
     }
@@ -1502,9 +1502,9 @@ async function handleSelectMenu(interaction: any) {
     console.error(`Select menu error (${action}):`, error);
     const message = error.message || 'An error occurred';
     if (interaction.replied || interaction.deferred) {
-      await interaction.editReply({ content: `? ${message}` });
+      await interaction.editReply({ content: `❌ ${message}` });
     } else {
-      await interaction.reply({ content: `? ${message}`, ephemeral: true });
+      await interaction.reply({ content: `❌ ${message}`, ephemeral: true });
     }
   }
 }
