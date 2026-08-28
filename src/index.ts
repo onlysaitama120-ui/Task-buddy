@@ -43,6 +43,10 @@ client.on('interactionCreate', async (interaction: any) => {
   if (interaction.isButton && interaction.isButton()) {
     try {
       await interaction.deferReply({ ephemeral: true });
+      // Send a follow-up so the button doesn't stay in "thinking" state
+      await interaction.editReply({
+        content: '✅ Action received!',
+      });
     } catch (err) {
       // If already deferred or replied, ignore
     }
@@ -53,6 +57,9 @@ client.on('interactionCreate', async (interaction: any) => {
   if (interaction.isStringSelectMenu && interaction.isStringSelectMenu()) {
     try {
       await interaction.deferReply({ ephemeral: true });
+      await interaction.editReply({
+        content: '✅ Selection received!',
+      });
     } catch (err) {
       // ignore
     }
