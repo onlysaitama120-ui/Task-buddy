@@ -6,53 +6,48 @@ export class VerificationService {
   private configRepo = new BotConfigRepository();
 
   async checkVerification(discordId: string, guildId: string): Promise<{ verified: boolean; reason?: string }> {
-    const account = await this.redditAccountRepo.findByUserId(discordId);
+    const accounts = await this.redditAccountRepo.findByUserId(discordId);
     const botConfig = await this.configRepo.get(guildId);
     const config = getConfig();
 
     const minKarma = botConfig?.minKarma ?? config.MIN_REDDIT_KARMA;
     const minAccountAge = botConfig?.minAccountAge ?? config.MIN_REDDIT_ACCOUNT_AGE_DAYS;
 
-    if (!account) {
+    if (accounts.length === 0) {
       return { verified: false, reason: 'No Reddit account registered. Use /register to add your Reddit account.' };
     }
 
-    if (account.karma < minKarma) {
-      return { verified: false, reason: `Insufficient karma. Required: ${minKarma}, Current: ${account.karma}` };
+    for (const account of accounts) {
+      if (account.karma >= minKarma && account.accountAge >= minAccountAge) {
+        if (!account.isVerified) {
+          await this.redditAccountRepo.update(discordId, account.username, { isVerified: true, verifiedAt: new Date() });
+        }
+        return { verified: true };
+      }
     }
 
-    if (account.accountAge < minAccountAge) {
-      return { verified: false, reason: `Account too new. Required age: ${minAccountAge} days, Current: ${account.accountAge} days` };
-    }
-
-    // Update isVerified in database to keep it in sync
-    if (!account.isVerified) {
-      await this.redditAccountRepo.update(discordId, { isVerified: true, verifiedAt: new Date() });
-    }
-
-    return { verified: true };
+    return { verified: false, reason: 'No Reddit account meets the verification requirements.' };
   }
 
   async getVerificationStatus(discordId: string, guildId: string) {
-    const account = await this.redditAccountRepo.findByUserId(discordId);
+    const accounts = await this.redditAccountRepo.findByUserId(discordId);
     const botConfig = await this.configRepo.get(guildId);
     const config = getConfig();
 
     const minKarma = botConfig?.minKarma ?? config.MIN_REDDIT_KARMA;
     const minAccountAge = botConfig?.minAccountAge ?? config.MIN_REDDIT_ACCOUNT_AGE_DAYS;
 
-    if (!account) {
+    if (accounts.length === 0) {
       return { registered: false, verified: false, requiredKarma: minKarma, requiredAccountAge: minAccountAge };
     }
 
-    // Compute verification dynamically
+    const account = accounts.find(a => a.karma >= minKarma && a.accountAge >= minAccountAge) ?? accounts[0];
     const isVerified = account.karma >= minKarma && account.accountAge >= minAccountAge;
 
-    // Update isVerified in database to keep it in sync
     if (account.isVerified !== isVerified) {
-      await this.redditAccountRepo.update(discordId, { 
-        isVerified, 
-        verifiedAt: isVerified ? new Date() : undefined 
+      await this.redditAccountRepo.update(discordId, account.username, {
+        isVerified,
+        verifiedAt: isVerified ? new Date() : undefined
       });
     }
 

@@ -25,7 +25,11 @@ export class UserRepository {
 
 export class RedditAccountRepository {
   async findByUserId(userId: string) {
-    return prisma.redditAccount.findUnique({ where: { userId } });
+    return prisma.redditAccount.findMany({ where: { userId } });
+  }
+
+  async findByUserIdAndUsername(userId: string, username: string) {
+    return prisma.redditAccount.findUnique({ where: { userId_username: { userId, username } } });
   }
 
   async findByUsername(username: string) {
@@ -38,16 +42,16 @@ export class RedditAccountRepository {
     });
   }
 
-  async update(userId: string, data: { karma?: number; accountAge?: number; isVerified?: boolean; verifiedAt?: Date; redditId?: string; accessToken?: string; refreshToken?: string; tokenExpiresAt?: Date }) {
+  async update(userId: string, username: string, data: { karma?: number; accountAge?: number; isVerified?: boolean; verifiedAt?: Date; redditId?: string; accessToken?: string; refreshToken?: string; tokenExpiresAt?: Date }) {
     return prisma.redditAccount.update({
-      where: { userId },
+      where: { userId_username: { userId, username } },
       data,
     });
   }
 
   async upsert(userId: string, username: string, karma: number, accountAge: number, redditId?: string) {
     return prisma.redditAccount.upsert({
-      where: { userId },
+      where: { userId_username: { userId, username } },
       update: { username, karma, accountAge, updatedAt: new Date(), redditId },
       create: { userId, username, karma, accountAge, redditId },
     });

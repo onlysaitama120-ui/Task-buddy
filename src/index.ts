@@ -954,7 +954,7 @@ async function handleButton(interaction: any) {
           await interaction.editReply({ content: '❌ No Reddit account registered.' });
           return;
         }
-        await prisma.redditAccount.delete({ where: { userId: interaction.user.id } });
+        await prisma.redditAccount.deleteMany({ where: { userId: interaction.user.id } });
         await interaction.editReply({ content: '✅ Your Reddit account has been unlinked. You can register again anytime.' });
         break;
       }

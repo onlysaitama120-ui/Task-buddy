@@ -38,7 +38,7 @@ model User {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
-  redditAccount RedditAccount?
+  redditAccounts RedditAccount[]
   taskClaims    TaskClaim[]
   statistics    UserStatistics?
 
@@ -47,7 +47,7 @@ model User {
 
 model RedditAccount {
   id           String   @id @default(cuid())
-  userId       String   @unique @map("user_id")
+  userId       String   @map("user_id")
   username     String
   redditId     String?  @unique @map("reddit_id")
   karma        Int      @default(0)
@@ -63,6 +63,7 @@ model RedditAccount {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   taskClaims   TaskClaim[]
 
+  @@unique([userId, username])
   @@map("reddit_accounts")
 }
 
