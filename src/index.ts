@@ -37,6 +37,29 @@ client.once('ready', async () => {
   startTimeoutWorker();
 });
 
+// ---- Generic interaction handler: respond to ALL buttons immediately ----
+client.on('interactionCreate', async (interaction: any) => {
+  // Defer every button interaction immediately to prevent "didn't respond in time"
+  if (interaction.isButton && interaction.isButton()) {
+    try {
+      await interaction.deferReply({ ephemeral: true });
+    } catch (err) {
+      // If already deferred or replied, ignore
+    }
+    return;
+  }
+  
+  // Defer every select menu interaction immediately
+  if (interaction.isStringSelectMenu && interaction.isStringSelectMenu()) {
+    try {
+      await interaction.deferReply({ ephemeral: true });
+    } catch (err) {
+      // ignore
+    }
+    return;
+  }
+});
+
 client.login(config.DISCORD_TOKEN).catch((err) => {
   console.error('Failed to login to Discord:', err);
   process.exit(1);
